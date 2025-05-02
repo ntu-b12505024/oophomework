@@ -74,12 +74,16 @@ public class DBUtil {
                 String createReservationTable = "CREATE TABLE IF NOT EXISTS reservation (" +
                         "uid INTEGER PRIMARY KEY AUTOINCREMENT," +
                         "member_uid INTEGER," +
-                        "showtime_uid INTEGER," +
+                        "movie_uid INTEGER," +
+                        "theater_uid INTEGER," +
+                        "time TEXT NOT NULL," +
                         "seat_no TEXT," +
-                        "reservation_time DATETIME DEFAULT CURRENT_TIMESTAMP," +
+                        "num_tickets INTEGER NOT NULL," +
                         "status TEXT DEFAULT 'CONFIRMED'," +
                         "FOREIGN KEY (member_uid) REFERENCES member(uid) ON DELETE CASCADE," +
-                        "FOREIGN KEY (showtime_uid) REFERENCES showtime(uid) ON DELETE CASCADE" +
+                        "FOREIGN KEY (movie_uid) REFERENCES movie(uid) ON DELETE CASCADE," +
+                        "FOREIGN KEY (theater_uid) REFERENCES theater(uid) ON DELETE CASCADE," +
+                        "UNIQUE (seat_no, time)" + // 添加唯一性約束
                         ");";
 
                 conn.createStatement().execute(createMemberTable);
@@ -221,7 +225,6 @@ public class DBUtil {
     }
 
     public static void main(String[] args) {
-        clearDatabase();
         System.out.println("Initializing database...");
         initializeDatabase();
         System.out.println("Database initialized successfully.");

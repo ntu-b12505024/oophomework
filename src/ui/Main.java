@@ -13,6 +13,9 @@ import exception.SeatUnavailableException;
 import java.util.InputMismatchException;
 import java.util.Optional;
 import java.util.Scanner;
+import java.util.ArrayList;
+import java.util.List;
+import java.io.File;
 
 public class Main {
     private static final MemberService memberService = new MemberService();
@@ -21,9 +24,15 @@ public class Main {
     private static final ReservationService reservationService = new ReservationService();
 
     public static void main(String[] args) {
-        // Initialize the database: clear then seed default data
-        DBUtil.clearDatabase();
-        DBUtil.initializeDatabase();
+        // 檢查資料庫是否存在
+        File dbFile = new File("cinema_booking.db");
+        if (!dbFile.exists()) {
+            System.out.println("Database not found. Initializing database...");
+            DBUtil.initializeDatabase();
+            System.out.println("Database initialized successfully.");
+        } else {
+            System.out.println("Database found. Skipping initialization.");
+        }
 
         Scanner scanner = new Scanner(System.in);
         boolean running = true;
@@ -159,27 +168,24 @@ public class Main {
                 int showtimeId = scanner.nextInt();
                 scanner.nextLine(); // Consume newline
 
-                System.out.print("Enter seat number: ");
-                String seatNo = scanner.nextLine();
-
-                System.out.print("Enter number of tickets: ");
+                System.out.println("Enter number of tickets:");
                 int numTickets = scanner.nextInt();
                 scanner.nextLine(); // Consume newline
 
-                System.out.print("Enter ticket type (e.g., Adult, Child): ");
-                String ticketType = scanner.nextLine();
+                List<String> seatNumbers = new ArrayList<>();
+                for (int i = 0; i < numTickets; i++) {
+                    System.out.println("Enter seat number for ticket " + (i + 1) + ":");
+                    String seatNo = scanner.nextLine();
+                    seatNumbers.add(seatNo);
+                }
 
-                reservationService.bookTicket(1, showtimeId, seatNo, numTickets, ticketType); // Assuming member ID is 1 for simplicity
-                System.out.println("Ticket(s) booked successfully!");
-                break; // Exit loop on success
-            } catch (AgeRestrictionException e) {
-                System.out.println("Booking failed: " + e.getMessage());
-                System.out.println("Possible reasons: Age restriction not met for the selected movie.");
-                System.out.println("Please try again.");
-            } catch (SeatUnavailableException e) {
-                System.out.println("Booking failed: " + e.getMessage());
-                System.out.println("Possible reasons: Not enough seats available for the selected showtime.");
-                System.out.println("Please try again.");
+                // 呼叫訂票服務並處理回傳結果
+                String result = reservationService.bookTickets(1, showtimeId, seatNumbers); // 假設會員 ID 為 1
+                System.out.println(result);
+
+                if (result.startsWith("訂票成功")) {
+                    break; // 成功後退出迴圈
+                }
             } catch (InputMismatchException e) {
                 System.out.println("Invalid input: Please enter valid data.");
                 scanner.nextLine(); // Clear invalid input
