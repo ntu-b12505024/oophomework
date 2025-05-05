@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import org.mindrot.jbcrypt.BCrypt;
 
 public class DBUtil {
     private static final String URL = "jdbc:sqlite:cinema_booking.db";
@@ -155,7 +156,8 @@ public class DBUtil {
                                      "ON CONFLICT(email) DO UPDATE SET password=excluded.password, birth_date=excluded.birth_date;";
                 try (PreparedStatement stmt = conn.prepareStatement(adminUpsert)) {
                     stmt.setString(1, "admin@admin.com");
-                    stmt.setString(2, PasswordUtil.encrypt("admin123"));
+                    // 使用 BCrypt 雜湊預設管理員密碼
+                    stmt.setString(2, BCrypt.hashpw("admin123", BCrypt.gensalt()));
                     stmt.setString(3, "2000-01-01");
                     stmt.executeUpdate();
                 }
