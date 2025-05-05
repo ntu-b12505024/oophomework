@@ -41,6 +41,13 @@ public class MovieService {
     }
 
     /**
+     * Returns all movies.
+     */
+    public List<Movie> getAllMovies() {
+        return listMovies();
+    }
+
+    /**
      * Gets a movie by its ID.
      * @param movieId The ID of the movie.
      * @return An Optional containing the Movie if found, otherwise empty.

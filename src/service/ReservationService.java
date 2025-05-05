@@ -12,6 +12,8 @@ import model.Showtime;
 import model.Member;
 
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.ArrayList;
 
 public class ReservationService {
     private final ReservationDAO reservationDAO = new ReservationDAO();
@@ -171,5 +173,16 @@ public class ReservationService {
 
     public boolean setReservationStatus(int reservationId, String status) {
         return reservationDAO.updateReservationStatus(reservationId, status);
+    }
+
+    /**
+     * Retrieves seat numbers already booked for a specific showtime.
+     */
+    public List<String> getBookedSeatsForShowtime(int showtimeUid) {
+        // 使用新的 DAO 方法取得已確認的訂票
+        return reservationDAO.getReservationsByShowtimeId(showtimeUid)
+            .stream()
+            .map(Reservation::getSeatNo)
+            .collect(Collectors.toList());
     }
 }

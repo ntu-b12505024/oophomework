@@ -1,5 +1,9 @@
 package model;
 
+import java.util.Collections;
+import java.util.List;
+import service.ShowtimeService;
+
 public class Reservation {
     private int uid;
     private int memberUid;
@@ -85,8 +89,25 @@ public class Reservation {
         this.numTickets = numTickets;
     }
 
+    /**
+     * Returns the showtime associated with this reservation.
+     */
+    public Showtime getShowtime() {
+        return new ShowtimeService().getShowtimeById(getShowtimeUid());
+    }
+
+    /**
+     * Returns the list of seat numbers for this reservation.
+     */
+    public List<String> getSeatNumbers() {
+        return Collections.singletonList(getSeatNo());
+    }
+
+    /**
+     * Returns the showtime UID for this reservation.
+     */
     public int getShowtimeUid() {
-        return theaterUid; // 假設 theaterUid 即為 showtimeUid
+        return theaterUid; // returns the underlying theaterUid repurposed
     }
 
     @Override

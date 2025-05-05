@@ -1,5 +1,8 @@
 package model;
 
+import service.MovieService;
+import service.TheaterService;
+
 public class Showtime {
     private int uid;
     private int movieUid;
@@ -48,6 +51,27 @@ public class Showtime {
 
     public void setTime(String time) {
         this.time = time;
+    }
+
+    /**
+     * Returns the Movie object associated with this showtime.
+     */
+    public Movie getMovie() {
+        return new MovieService().getMovieById(movieUid).orElse(null);
+    }
+
+    /**
+     * Returns the Theater object associated with this showtime.
+     */
+    public Theater getTheater() {
+        return new TheaterService().getTheaterById(theaterUid).orElse(null);
+    }
+
+    /**
+     * Returns the show time string.
+     */
+    public String getShowTime() {
+        return getTime();
     }
 
     @Override

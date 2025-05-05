@@ -29,4 +29,11 @@ public class ShowtimeService {
     public Showtime getShowtimeById(int showtimeId) {
         return showtimeDAO.getShowtimeById(showtimeId);
     }
+
+    /**
+     * Returns all showtimes.
+     */
+    public List<Showtime> getAllShowtimes() {
+        return listShowtimes();
+    }
 }

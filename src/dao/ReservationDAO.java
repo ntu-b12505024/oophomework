@@ -186,6 +186,26 @@ public class ReservationDAO {
         return reservations;
     }
 
+    /**
+     * Retrieves all confirmed reservations for a specific showtime.
+     */
+    public List<Reservation> getReservationsByShowtimeId(int showtimeUid) {
+        List<Reservation> reservations = new ArrayList<>();
+        String sql = "SELECT * FROM reservation WHERE theater_uid = ? AND status = 'CONFIRMED'";
+        try (Connection conn = DBUtil.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, showtimeUid);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    reservations.add(mapResultSetToReservation(rs));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return reservations;
+    }
+
     // Helper method to map ResultSet to Reservation object
     private Reservation mapResultSetToReservation(ResultSet rs) throws SQLException {
         return new Reservation(
