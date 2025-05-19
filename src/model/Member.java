@@ -33,6 +33,14 @@ public class Member {
     public String getBirthDate() {
         return birthDate;
     }
+    
+    /**
+     * 獲取會員的用戶名，使用電子郵件作為用戶名
+     * @return 會員的用戶名（電子郵件）
+     */
+    public String getUsername() {
+        return email;
+    }
 
     /**
      * Calculates the age of the member based on their birth date.

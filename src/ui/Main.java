@@ -4,6 +4,7 @@ import service.MemberService;
 import service.MovieService;
 import service.ShowtimeService;
 import service.ReservationService;
+import service.DataImportService;
 import util.DBUtil;
 import model.Member;
 import model.Movie;
@@ -16,54 +17,119 @@ import java.util.Scanner;
 import java.util.ArrayList;
 import java.util.List;
 import java.io.File;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 
 public class Main {
     private static final MemberService memberService = new MemberService();
     private static final MovieService movieService = new MovieService();
     private static final ShowtimeService showtimeService = new ShowtimeService();
     private static final ReservationService reservationService = new ReservationService();
+    private static final DataImportService dataImportService = new DataImportService();
 
     public static void main(String[] args) {
         // 檢查資料庫是否存在
         File dbFile = new File("cinema_booking.db");
         if (!dbFile.exists()) {
-            System.out.println("Database not found. Initializing database...");
+            System.out.println("資料庫不存在。初始化資料庫...");
             DBUtil.initializeDatabase();
-            System.out.println("Database initialized successfully.");
+            System.out.println("資料庫初始化成功。");
+            
+            // 初始化後導入JSON資料
+            importDataFromJson();
         } else {
-            System.out.println("Database found. Skipping initialization.");
+            System.out.println("資料庫已存在。跳過初始化。");
+            
+            // 確保資料是最新的
+            System.out.println("檢查並更新電影和影廳資料...");
+            importDataFromJson();
         }
 
+        // 啟動GUI界面
+        startGUI();
+    }
+
+    /**
+     * 從JSON檔案導入資料到資料庫
+     */
+    private static void importDataFromJson() {
+        try {
+            // 導入電影資訊
+            String movieJsonPath = "data/movie_info.json";
+            int movieCount = dataImportService.importMoviesFromJson(movieJsonPath);
+            System.out.println("成功導入 " + movieCount + " 部電影。");
+            
+            // 導入影廳座位資訊
+            String bigRoomJsonPath = "data/big_room.json";
+            String smallRoomJsonPath = "data/small_room.json";
+            int theaterCount = dataImportService.importTheatersFromJson(bigRoomJsonPath, smallRoomJsonPath);
+            System.out.println("成功更新 " + theaterCount + " 個影廳資訊。");
+        } catch (Exception e) {
+            System.err.println("導入JSON資料時發生錯誤: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 啟動圖形化界面
+     */
+    private static void startGUI() {
+        try {
+            // 設置界面風格為系統風格
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            
+            // 在事件分派線程中啟動GUI
+            SwingUtilities.invokeLater(new Runnable() {
+                @Override
+                public void run() {
+                    new CinemaBookingGUI();
+                }
+            });
+        } catch (Exception e) {
+            System.err.println("啟動GUI時發生錯誤: " + e.getMessage());
+            e.printStackTrace();
+            
+            // 如果GUI啟動失敗，則退回到命令行界面
+            System.out.println("GUI啟動失敗。正在退回到命令行界面...");
+            startCommandLineInterface();
+        }
+    }
+
+    /**
+     * 啟動命令行界面(作為備用)
+     */
+    private static void startCommandLineInterface() {
         Scanner scanner = new Scanner(System.in);
         boolean running = true;
 
         while (running) {
-            System.out.println("Welcome to the Cinema Booking System");
-            System.out.println("1. Register");
-            System.out.println("2. Login");
-            System.out.println("3. Exit");
-            System.out.print("Choose an option: ");
+            System.out.println("歡迎使用電影院訂票系統");
+            System.out.println("1. 註冊");
+            System.out.println("2. 登入");
+            System.out.println("3. 退出");
+            System.out.print("請選擇: ");
 
             try {
                 int choice = scanner.nextInt();
-                scanner.nextLine(); // Consume newline
+                scanner.nextLine(); // 消費換行符
 
                 switch (choice) {
                     case 1 -> register(scanner);
                     case 2 -> login(scanner);
                     case 3 -> {
-                        System.out.println("Goodbye!");
+                        System.out.println("謝謝使用，再見！");
                         running = false;
                     }
-                    default -> System.out.println("Invalid option. Please try again.");
+                    default -> System.out.println("無效選項。請重試。");
                 }
             } catch (InputMismatchException e) {
-                System.out.println("Invalid input. Please enter a number.");
-                scanner.nextLine(); // Clear invalid input
+                System.out.println("無效輸入。請輸入數字。");
+                scanner.nextLine(); // 清除無效輸入
             }
         }
     }
 
+    // 以下是原有的命令行界面方法，保留不變
     private static void register(Scanner scanner) {
         while (true) {
             try {

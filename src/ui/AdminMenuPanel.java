@@ -4,16 +4,24 @@ import model.Member;
 import model.Movie;
 import model.Reservation;
 import model.Showtime;
+import model.Theater;
 import service.MemberService;
 import service.MovieService;
 import service.ReservationService;
 import service.ShowtimeService;
+import service.TheaterService;
 import util.DBUtil;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableRowSorter;
 import java.awt.*;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
+import com.toedter.calendar.JDateChooser; // 添加 JDateChooser 庫
+import com.toedter.calendar.JSpinnerDateEditor; // 用於顯示時間選擇
 
 public class AdminMenuPanel extends JPanel {
 
@@ -22,6 +30,7 @@ public class AdminMenuPanel extends JPanel {
     private final MovieService movieService;
     private final ShowtimeService showtimeService;
     private final MemberService memberService; // Needed for some operations potentially
+    private final TheaterService theaterService = new TheaterService();
 
     private JTabbedPane tabbedPane;
 
@@ -36,9 +45,11 @@ public class AdminMenuPanel extends JPanel {
     // Tab 2: Showtime Management
     private JTable showtimesTable;
     private DefaultTableModel showtimesTableModel;
-    private JTextField updateShowtimeIdField, updateShowtimeTimeField;
+    private JTextField updateShowtimeIdField;
+    private JDateChooser updateShowtimeTimeChooser; // 替代 updateShowtimeTimeField
     private JButton updateShowtimeButton;
-    // TODO: Add Showtime functionality could be added here
+    private JComboBox<String> movieComboBoxForAddShowtime; // Field for movie selection in add showtime
+    private JDateChooser showtimeTimeChooser; // 替代 showtimeTimeField
 
     // Tab 3: Reservation Management
     private JTable reservationsTable;
@@ -46,6 +57,8 @@ public class AdminMenuPanel extends JPanel {
     private JTextField updateReservationIdField;
     private JComboBox<String> updateReservationStatusCombo;
     private JButton updateReservationStatusButton;
+    private JTextField searchReservationField; // 新增：訂單搜索欄位
+    private JComboBox<String> filterStatusCombo; // 新增：訂單狀態過濾器
 
     // Tab 4: Database Management
     private JButton resetDatabaseButton;
@@ -186,8 +199,9 @@ public class AdminMenuPanel extends JPanel {
                 movieDescField.setText("");
                 movieRatingField.setText("");
                 loadMovies();
+                updateMovieComboBoxInAddShowtime(); // Refresh movie combobox in add showtime
             } else {
-                JOptionPane.showMessageDialog(this, "新增電影失敗 (可能是內部錯誤)", "新增失敗", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "新增電影失敗 (可能是內部錯誤或電影名稱重複)", "新增失敗", JOptionPane.ERROR_MESSAGE);
             }
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(this, "片長必須是有效的數字", "輸入錯誤", JOptionPane.ERROR_MESSAGE);
@@ -218,6 +232,7 @@ public class AdminMenuPanel extends JPanel {
                     JOptionPane.showMessageDialog(this, "電影移除成功!", "成功", JOptionPane.INFORMATION_MESSAGE);
                     removeMovieIdField.setText("");
                     loadMovies();
+                    updateMovieComboBoxInAddShowtime(); // Refresh movie combobox in add showtime
                     loadAllShowtimes(); // Refresh showtimes as they might be affected
                     loadAllReservations(); // Refresh reservations
                 } else {
@@ -247,22 +262,110 @@ public class AdminMenuPanel extends JPanel {
         JScrollPane showtimesScrollPane = new JScrollPane(showtimesTable);
         panel.add(showtimesScrollPane, BorderLayout.CENTER);
 
-        // --- Action Panel (Update Time) ---
-        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        actionPanel.setBorder(BorderFactory.createTitledBorder("更新場次時間"));
-        actionPanel.add(new JLabel("場次 ID:"));
+        // --- Action Panel (Update and Add Showtime) ---
+        JPanel actionPanel = new JPanel(new GridLayout(2, 1, 10, 10));
+
+        // Update Showtime Section
+        JPanel updatePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        updatePanel.setBorder(BorderFactory.createTitledBorder("更新場次時間"));
+        updatePanel.add(new JLabel("場次 ID:"));
         updateShowtimeIdField = new JTextField(5);
-        actionPanel.add(updateShowtimeIdField);
-        actionPanel.add(new JLabel("新時間 (yyyy-MM-dd HH:mm):"));
-        updateShowtimeTimeField = new JTextField(15);
-        actionPanel.add(updateShowtimeTimeField);
+        updatePanel.add(updateShowtimeIdField);
+        
+        // 使用日期時間選擇器替代文本輸入框
+        updatePanel.add(new JLabel("新時間:"));
+        updateShowtimeTimeChooser = new JDateChooser();
+        updateShowtimeTimeChooser.setDateFormatString("yyyy-MM-dd HH:mm");
+        // 設定當前時間作為默認值
+        updateShowtimeTimeChooser.setDate(new Date());
+        // JDateChooser 不需要額外設定 JSpinnerDateEditor
+        updatePanel.add(updateShowtimeTimeChooser);
+        
         updateShowtimeButton = new JButton("更新時間");
         updateShowtimeButton.addActionListener(e -> handleUpdateShowtime());
-        actionPanel.add(updateShowtimeButton);
+        updatePanel.add(updateShowtimeButton);
 
+        // Add Showtime Section
+        JPanel addPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        addPanel.setBorder(BorderFactory.createTitledBorder("新增場次"));
+        addPanel.add(new JLabel("電影:"));
+        movieComboBoxForAddShowtime = new JComboBox<>(); // Initialize the field
+        // Populate initial items
+        updateMovieComboBoxInAddShowtime(); // Populate using the new method
+
+        addPanel.add(movieComboBoxForAddShowtime);
+        addPanel.add(new JLabel("影廳:"));
+        JComboBox<String> theaterComboBox = new JComboBox<>();
+        for (Theater t : theaterService.listTheaters()) {
+            theaterComboBox.addItem(t.getUid() + " - " + t.getType());
+        }
+        addPanel.add(theaterComboBox);
+        
+        // 使用日期時間選擇器
+        addPanel.add(new JLabel("時間: "));
+        showtimeTimeChooser = new JDateChooser();
+        showtimeTimeChooser.setDateFormatString("yyyy-MM-dd HH:mm");
+        // 設定當前時間作為默認值
+        showtimeTimeChooser.setDate(new Date());
+        addPanel.add(showtimeTimeChooser);
+        
+        JButton addShowtimeButton = new JButton("新增場次");
+        addShowtimeButton.addActionListener(e -> {
+            String movieSel = (String) movieComboBoxForAddShowtime.getSelectedItem(); // Use the field
+            if (movieSel == null || movieSel.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "請選擇電影", "新增錯誤", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            int movieId = Integer.parseInt(movieSel.split(" - ")[0]);
+            String theaterSel = (String) theaterComboBox.getSelectedItem();
+            if (theaterSel == null || theaterSel.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "請選擇影廳", "新增錯誤", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            int theaterId = Integer.parseInt(theaterSel.split(" - ")[0]);
+            
+            // 從日期選擇器獲取日期時間
+            Date selectedDate = showtimeTimeChooser.getDate();
+            if (selectedDate == null) {
+                JOptionPane.showMessageDialog(this, "請選擇時間", "新增錯誤", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            
+            // 格式化日期為所需格式
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+            String time = sdf.format(selectedDate);
+            
+            try {
+                showtimeService.addShowtime(movieId, theaterId, time);
+                JOptionPane.showMessageDialog(this, "場次新增成功!", "成功", JOptionPane.INFORMATION_MESSAGE);
+                // 重置日期選擇器為當前時間
+                showtimeTimeChooser.setDate(new Date());
+                loadAllShowtimes();
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "新增場次錯誤: " + ex.getMessage(), "系統錯誤", JOptionPane.ERROR_MESSAGE);
+                ex.printStackTrace();
+            }
+        });
+        addPanel.add(addShowtimeButton);
+
+        actionPanel.add(updatePanel);
+        actionPanel.add(addPanel);
         panel.add(actionPanel, BorderLayout.SOUTH);
 
         return panel;
+    }
+
+    private void updateMovieComboBoxInAddShowtime() {
+        if (movieComboBoxForAddShowtime == null) {
+            movieComboBoxForAddShowtime = new JComboBox<>(); // Ensure it's initialized if called early
+        }
+        movieComboBoxForAddShowtime.removeAllItems();
+        List<Movie> movies = movieService.getAllMovies();
+        if (movies != null) {
+            for (Movie m : movies) {
+                movieComboBoxForAddShowtime.addItem(m.getUid() + " - " + m.getName());
+            }
+        }
     }
 
     private void loadAllShowtimes() {
@@ -284,17 +387,18 @@ public class AdminMenuPanel extends JPanel {
 
     private void handleUpdateShowtime() {
         String idStr = updateShowtimeIdField.getText().trim();
-        String newTime = updateShowtimeTimeField.getText().trim();
+        
+        // 從日期選擇器獲取日期時間
+        Date selectedDate = updateShowtimeTimeChooser.getDate();
 
-        if (idStr.isEmpty() || newTime.isEmpty()) {
+        if (idStr.isEmpty() || selectedDate == null) {
             JOptionPane.showMessageDialog(this, "場次 ID 和新時間不能為空", "更新錯誤", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        // Basic format check (can be improved with regex or SimpleDateFormat)
-        if (!newTime.matches("^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}$")) {
-             JOptionPane.showMessageDialog(this, "時間格式錯誤，請使用 yyyy-MM-dd HH:mm", "格式錯誤", JOptionPane.WARNING_MESSAGE);
-             return;
-        }
+
+        // 格式化日期為所需格式
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+        String newTime = sdf.format(selectedDate);
 
         try {
             int showtimeId = Integer.parseInt(idStr);
@@ -302,7 +406,8 @@ public class AdminMenuPanel extends JPanel {
             if (updated) {
                 JOptionPane.showMessageDialog(this, "場次時間更新成功!", "成功", JOptionPane.INFORMATION_MESSAGE);
                 updateShowtimeIdField.setText("");
-                updateShowtimeTimeField.setText("");
+                // 重置日期選擇器為當前時間
+                updateShowtimeTimeChooser.setDate(new Date());
                 loadAllShowtimes(); // Reload table
             } else {
                 JOptionPane.showMessageDialog(this, "更新場次時間失敗 (可能是 ID 不存在或格式錯誤)", "更新失敗", JOptionPane.ERROR_MESSAGE);
@@ -322,43 +427,243 @@ public class AdminMenuPanel extends JPanel {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
+        // --- 上方搜索和過濾區域 ---
+        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        searchPanel.setBorder(BorderFactory.createTitledBorder("搜索和過濾"));
+        
+        // 搜索欄位
+        searchPanel.add(new JLabel("搜索訂票:"));
+        searchReservationField = new JTextField(15);
+        searchPanel.add(searchReservationField);
+        JButton searchButton = new JButton("搜索");
+        searchButton.addActionListener(e -> {
+            searchReservations(searchReservationField.getText());
+        });
+        searchPanel.add(searchButton);
+        
+        // 狀態過濾
+        searchPanel.add(new JLabel("訂單狀態:"));
+        filterStatusCombo = new JComboBox<>(new String[]{"全部", "已確認", "已取消"});
+        filterStatusCombo.addActionListener(e -> {
+            filterReservationsByStatus((String)filterStatusCombo.getSelectedItem());
+        });
+        searchPanel.add(filterStatusCombo);
+        
+        // 刷新按鈕
+        JButton refreshButton = new JButton("刷新資料");
+        refreshButton.addActionListener(e -> loadAllReservations());
+        searchPanel.add(refreshButton);
+
+        panel.add(searchPanel, BorderLayout.NORTH);
+
         // --- Reservation List Table ---
-        reservationsTableModel = new DefaultTableModel(new String[]{"訂票 ID", "會員 ID", "場次 ID", "座位", "狀態"}, 0) {
-             @Override public boolean isCellEditable(int row, int column) { return false; }
+        reservationsTableModel = new DefaultTableModel(
+            new String[]{"訂票 ID", "會員 ID", "會員名稱", "電影", "場次 ID", "影廳", "時間", "座位", "狀態"}, 0) {
+             @Override 
+             public boolean isCellEditable(int row, int column) { return false; }
         };
         reservationsTable = new JTable(reservationsTableModel);
+        reservationsTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        
+        // 添加排序功能
+        TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(reservationsTableModel);
+        reservationsTable.setRowSorter(sorter);
+        
         JScrollPane reservationsScrollPane = new JScrollPane(reservationsTable);
         panel.add(reservationsScrollPane, BorderLayout.CENTER);
 
         // --- Action Panel (Update Status) ---
-        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        actionPanel.setBorder(BorderFactory.createTitledBorder("更新訂票狀態"));
-        actionPanel.add(new JLabel("訂票 ID:"));
+        JPanel actionPanel = new JPanel(new BorderLayout(10, 10));
+        actionPanel.setBorder(BorderFactory.createTitledBorder("訂單管理操作"));
+        
+        // 訂單詳細資訊面板
+        JPanel detailsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        detailsPanel.add(new JLabel("選中訂單詳細資訊："));
+        JLabel detailsLabel = new JLabel("未選擇訂單");
+        detailsPanel.add(detailsLabel);
+        
+        // 當選擇表格行時顯示詳細資訊
+        reservationsTable.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting() && reservationsTable.getSelectedRow() != -1) {
+                int row = reservationsTable.convertRowIndexToModel(reservationsTable.getSelectedRow());
+                String id = reservationsTableModel.getValueAt(row, 0).toString();
+                String memberId = reservationsTableModel.getValueAt(row, 1).toString();
+                String movieName = reservationsTableModel.getValueAt(row, 3).toString();
+                String status = reservationsTableModel.getValueAt(row, 8).toString();
+                
+                updateReservationIdField.setText(id);
+                detailsLabel.setText("ID: " + id + " | 會員: " + memberId + " | 電影: " + movieName + " | 狀態: " + status);
+            }
+        });
+        
+        actionPanel.add(detailsPanel, BorderLayout.NORTH);
+        
+        // 狀態更新面板
+        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        statusPanel.add(new JLabel("訂票 ID:"));
         updateReservationIdField = new JTextField(5);
-        actionPanel.add(updateReservationIdField);
-        actionPanel.add(new JLabel("新狀態:"));
-        updateReservationStatusCombo = new JComboBox<>(new String[]{"CONFIRMED", "CANCELLED"}); // Add other statuses if needed
-        actionPanel.add(updateReservationStatusCombo);
+        statusPanel.add(updateReservationIdField);
+        statusPanel.add(new JLabel("新狀態:"));
+        updateReservationStatusCombo = new JComboBox<>(new String[]{"CONFIRMED", "CANCELLED"});
+        statusPanel.add(updateReservationStatusCombo);
         updateReservationStatusButton = new JButton("更新狀態");
         updateReservationStatusButton.addActionListener(e -> handleUpdateReservationStatus());
-        actionPanel.add(updateReservationStatusButton);
+        statusPanel.add(updateReservationStatusButton);
+        
+        actionPanel.add(statusPanel, BorderLayout.CENTER);
 
         panel.add(actionPanel, BorderLayout.SOUTH);
 
         return panel;
     }
 
-    private void loadAllReservations() {
+    // 搜索訂單
+    private void searchReservations(String query) {
+        if (query.isEmpty()) {
+            loadAllReservations(); // 如果查詢為空，顯示所有訂單
+            return;
+        }
+        
+        // 先加載所有訂單
+        List<Reservation> allReservations = reservationService.listReservations();
         reservationsTableModel.setRowCount(0);
-        List<Reservation> reservations = reservationService.listReservations(); // Need a method to get all reservations
-        for (Reservation res : reservations) {
-            reservationsTableModel.addRow(new Object[]{
+        
+        // 只顯示匹配的訂單
+        for (Reservation res : allReservations) {
+            // 取得會員名稱
+            Member member = memberService.getMemberById(res.getMemberUid());
+            String memberName = (member != null) ? member.getUsername() : "未知";
+            
+            // 取得電影名稱和影廳資訊
+            Showtime showtime = res.getShowtime();
+            Movie movie = (showtime != null) ? showtime.getMovie() : null;
+            String movieName = (movie != null) ? movie.getName() : "未知電影";
+            String theaterType = (showtime != null && showtime.getTheater() != null) ? 
+                                showtime.getTheater().getType() : "未知影廳";
+            String showTimeStr = (showtime != null) ? showtime.getShowTime() : "未知時間";
+            
+            // 檢查是否包含搜索詞
+            String resInfo = res.getUid() + " " + res.getMemberUid() + " " + memberName + " " + 
+                            movieName + " " + theaterType + " " + showTimeStr + " " + 
+                            res.getSeatNo() + " " + res.getStatus();
+            
+            if (resInfo.toLowerCase().contains(query.toLowerCase())) {
+                reservationsTableModel.addRow(new Object[]{
                     res.getUid(),
                     res.getMemberUid(),
+                    memberName,
+                    movieName,
                     res.getShowtimeUid(),
+                    theaterType,
+                    showTimeStr,
                     String.join(", ", res.getSeatNumbers()),
                     res.getStatus()
+                });
+            }
+        }
+        
+        if (reservationsTableModel.getRowCount() == 0) {
+            JOptionPane.showMessageDialog(this, "沒有找到匹配的訂單", "搜索結果", JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+    
+    // 按狀態過濾訂單
+    private void filterReservationsByStatus(String status) {
+        // 先加載所有訂單
+        List<Reservation> allReservations = reservationService.listReservations();
+        reservationsTableModel.setRowCount(0);
+        
+        for (Reservation res : allReservations) {
+            // 狀態過濾
+            if (!status.equals("全部")) {
+                if (status.equals("已確認") && !res.getStatus().equals("CONFIRMED")) continue;
+                if (status.equals("已取消") && !res.getStatus().equals("CANCELLED")) continue;
+            }
+            
+            // 取得會員名稱
+            Member member = memberService.getMemberById(res.getMemberUid());
+            String memberName = (member != null) ? member.getUsername() : "未知";
+            
+            // 取得電影名稱和影廳資訊
+            Showtime showtime = res.getShowtime();
+            Movie movie = (showtime != null) ? showtime.getMovie() : null;
+            String movieName = (movie != null) ? movie.getName() : "未知電影";
+            String theaterType = (showtime != null && showtime.getTheater() != null) ? 
+                                showtime.getTheater().getType() : "未知影廳";
+            String showTimeStr = (showtime != null) ? showtime.getShowTime() : "未知時間";
+            
+            reservationsTableModel.addRow(new Object[]{
+                res.getUid(),
+                res.getMemberUid(),
+                memberName,
+                movieName,
+                res.getShowtimeUid(),
+                theaterType,
+                showTimeStr,
+                String.join(", ", res.getSeatNumbers()),
+                res.getStatus()
             });
+        }
+    }
+
+    private void loadAllReservations() {
+        reservationsTableModel.setRowCount(0);
+        List<Reservation> reservations = reservationService.listReservations();
+        
+        // 如果沒有訂單，顯示提示訊息
+        if (reservations.isEmpty()) {
+            System.out.println("沒有找到任何訂單記錄");
+            JOptionPane.showMessageDialog(this, "資料庫中沒有找到任何訂單記錄", "無訂單資料", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        System.out.println("找到 " + reservations.size() + " 條訂單記錄");
+        
+        for (Reservation res : reservations) {
+            try {
+                // 取得會員名稱 (使用 email 作為用戶名)
+                Member member = memberService.getMemberById(res.getMemberUid());
+                String memberName = (member != null) ? member.getEmail() : "未知會員";
+                
+                // 直接從 Reservation 獲取電影信息
+                Movie movie = null;
+                String movieName = "未知電影";
+                try {
+                    movie = res.getMovie();
+                    if (movie != null) {
+                        movieName = movie.getName();
+                    }
+                } catch (Exception e) {
+                    System.err.println("無法獲取電影資訊: " + e.getMessage());
+                }
+                
+                // 顯示場次和影廳資訊
+                String theaterId = String.valueOf(res.getTheaterUid());
+                String showTimeStr = res.getTime();
+                
+                System.out.println("處理訂單 ID: " + res.getUid() + ", 會員: " + memberName + ", 電影: " + movieName + ", 時間: " + showTimeStr);
+                
+                // 將資訊添加到表格
+                reservationsTableModel.addRow(new Object[]{
+                    res.getUid(),
+                    res.getMemberUid(),
+                    memberName,
+                    movieName,
+                    res.getShowtimeUid(),
+                    theaterId,
+                    showTimeStr,
+                    res.getSeatNo(),
+                    res.getStatus()
+                });
+            } catch (Exception e) {
+                System.err.println("處理訂單時發生錯誤: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+        
+        // 如果表格為空，顯示提示訊息
+        if (reservationsTableModel.getRowCount() == 0) {
+            JOptionPane.showMessageDialog(this, "無法載入訂單資料，請檢查系統日誌", "資料載入失敗", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -377,7 +682,7 @@ public class AdminMenuPanel extends JPanel {
             if (updated) {
                 JOptionPane.showMessageDialog(this, "訂票狀態更新成功!", "成功", JOptionPane.INFORMATION_MESSAGE);
                 updateReservationIdField.setText("");
-                loadAllReservations(); // Reload table
+                loadAllReservations(); // 重新載入表格
             } else {
                 JOptionPane.showMessageDialog(this, "更新訂票狀態失敗 (可能是 ID 不存在)", "更新失敗", JOptionPane.ERROR_MESSAGE);
             }

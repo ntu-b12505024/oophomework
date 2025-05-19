@@ -208,6 +208,42 @@ public class ShowtimeDAO {
         }
     }
 
+    /**
+     * 在事務中減少場次的可用座位數量
+     * @param conn 資料庫連接（必須在事務中）
+     * @param showtimeUid 場次ID
+     * @param count 要減少的座位數量
+     * @return 操作是否成功
+     */
+    public boolean decreaseAvailableSeatsWithConnection(Connection conn, int showtimeUid, int count) throws SQLException {
+        String sql = "UPDATE showtime SET available_seats = available_seats - ? WHERE uid = ? AND available_seats >= ?";
+        
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, count);
+            stmt.setInt(2, showtimeUid);
+            stmt.setInt(3, count);
+            int rowsAffected = stmt.executeUpdate();
+            return rowsAffected > 0;
+        }
+    }
+
+    /**
+     * 在事務中增加指定場次的可用座位數
+     * @param conn 已開啟的資料庫連接
+     * @param showtimeUid 場次ID
+     * @param numSeats 要增加的座位數量
+     * @return 是否成功增加座位數
+     */
+    public boolean increaseAvailableSeatsWithConnection(Connection conn, int showtimeUid, int numSeats) throws SQLException {
+        String sql = "UPDATE showtime SET available_seats = available_seats + ? WHERE uid = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, numSeats);
+            stmt.setInt(2, showtimeUid);
+            int rowsAffected = stmt.executeUpdate();
+            return rowsAffected > 0;
+        }
+    }
+
     // Helper method to map ResultSet to Showtime object
     private Showtime mapResultSetToShowtime(ResultSet rs) throws SQLException {
         return new Showtime(

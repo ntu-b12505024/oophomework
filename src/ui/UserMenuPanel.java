@@ -10,10 +10,14 @@ import service.ShowtimeService;
 import exception.AgeRestrictionException;
 import exception.SeatUnavailableException;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -36,8 +40,10 @@ public class UserMenuPanel extends JPanel {
     private DefaultTableModel showtimesTableModel;
     private JTextField seatsField;
     private JButton bookButton;
+    private JButton selectSeatsButton; // 新增選擇座位按鈕
     private Movie selectedMovie = null;
     private Showtime selectedShowtime = null;
+    private List<String> selectedSeats = new ArrayList<>(); // 儲存使用者選擇的座位
 
     // Tab 2: My Reservations / Cancel Reservation
     private JTable reservationsTable;
@@ -124,8 +130,8 @@ public class UserMenuPanel extends JPanel {
                 int selectedRow = showtimesTable.getSelectedRow();
                 int showtimeId = (int) showtimesTableModel.getValueAt(selectedRow, 0);
                 selectedShowtime = showtimeService.getShowtimeById(showtimeId); // Directly get Showtime object
-                seatsField.setEnabled(selectedShowtime != null);
-                bookButton.setEnabled(selectedShowtime != null && !seatsField.getText().trim().isEmpty());
+                selectSeatsButton.setEnabled(selectedShowtime != null); // 啟用選擇座位按鈕
+                bookButton.setEnabled(selectedShowtime != null && !selectedSeats.isEmpty()); // 更新訂票按鈕狀態
              }
         });
         JScrollPane showtimesScrollPane = new JScrollPane(showtimesTable);
@@ -133,26 +139,33 @@ public class UserMenuPanel extends JPanel {
 
 
         // --- Booking Action Area ---
-        JPanel bookingActionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JPanel bookingActionPanel = new JPanel(new GridLayout(2, 1, 5, 5));
         bookingActionPanel.setBorder(BorderFactory.createTitledBorder("訂票操作"));
-        JLabel seatsLabel = new JLabel("輸入座位 (以逗號分隔, e.g., A1,A2):");
-        seatsField = new JTextField(20);
-        seatsField.setEnabled(false); // Initially disabled
+        
+        // 第一行：座位選擇按鈕和已選座位顯示
+        JPanel seatSelectionPanel = new JPanel(new BorderLayout(5, 0));
+        selectSeatsButton = new JButton("選擇座位");
+        selectSeatsButton.setEnabled(false); // 初始時禁用
+        selectSeatsButton.addActionListener(e -> showSeatSelectionDialog());
+        
+        JPanel selectedSeatsDisplayPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JLabel selectedSeatsLabel = new JLabel("已選座位: ");
+        JLabel selectedSeatsValueLabel = new JLabel("(尚未選擇)");
+        selectedSeatsDisplayPanel.add(selectedSeatsLabel);
+        selectedSeatsDisplayPanel.add(selectedSeatsValueLabel);
+        
+        seatSelectionPanel.add(selectSeatsButton, BorderLayout.WEST);
+        seatSelectionPanel.add(selectedSeatsDisplayPanel, BorderLayout.CENTER);
+        
+        // 第二行：訂票按鈕
+        JPanel bookButtonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         bookButton = new JButton("確認訂票");
-        bookButton.setEnabled(false); // Initially disabled
-
-        seatsField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-            public void changedUpdate(javax.swing.event.DocumentEvent e) { checkBookButtonState(); }
-            public void removeUpdate(javax.swing.event.DocumentEvent e) { checkBookButtonState(); }
-            public void insertUpdate(javax.swing.event.DocumentEvent e) { checkBookButtonState(); }
-        });
-
-
-        bookingActionPanel.add(seatsLabel);
-        bookingActionPanel.add(seatsField);
-        bookingActionPanel.add(bookButton);
-
+        bookButton.setEnabled(false); // 初始時禁用
         bookButton.addActionListener(e -> handleBooking());
+        bookButtonPanel.add(bookButton);
+
+        bookingActionPanel.add(seatSelectionPanel);
+        bookingActionPanel.add(bookButtonPanel);
 
 
         // --- Layout Setup ---
@@ -163,6 +176,78 @@ public class UserMenuPanel extends JPanel {
         panel.add(bookingActionPanel, BorderLayout.SOUTH);
 
         return panel;
+    }
+    
+    /**
+     * 顯示座位選擇對話框
+     */
+    private void showSeatSelectionDialog() {
+        if (selectedShowtime == null) {
+            JOptionPane.showMessageDialog(this, "請先選擇一個場次", "選擇座位", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        // 創建座位選擇面板
+        SeatSelectionPanel seatSelectionPanel = new SeatSelectionPanel(selectedShowtime, reservationService);
+        
+        // 設置已選擇的座位
+        if (!selectedSeats.isEmpty()) {
+            // 這裡需要在 SeatSelectionPanel 中添加相關方法來預設已選擇的座位
+            // 目前先跳過此步驟
+        }
+        
+        // 設置座位選擇回調
+        seatSelectionPanel.setSeatSelectionCallback(newSelectedSeats -> {
+            selectedSeats = newSelectedSeats;
+            updateSelectedSeatsDisplay(); // 更新顯示已選座位的標籤
+            bookButton.setEnabled(!selectedSeats.isEmpty()); // 更新訂票按鈕狀態
+        });
+        
+        // 創建並顯示對話框
+        JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "選擇座位", true);
+        dialog.setContentPane(seatSelectionPanel);
+        dialog.setSize(800, 600);
+        dialog.setLocationRelativeTo(this);
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        
+        // 添加確認按鈕
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton confirmButton = new JButton("確認座位選擇");
+        confirmButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                selectedSeats = seatSelectionPanel.getSelectedSeats();
+                updateSelectedSeatsDisplay();
+                bookButton.setEnabled(!selectedSeats.isEmpty());
+                dialog.dispose();
+            }
+        });
+        buttonPanel.add(confirmButton);
+        
+        // 將按鈕面板添加到對話框底部
+        dialog.getContentPane().add(buttonPanel, BorderLayout.SOUTH);
+        
+        // 顯示對話框
+        dialog.setVisible(true);
+    }
+    
+    /**
+     * 更新已選座位的顯示
+     */
+    private void updateSelectedSeatsDisplay() {
+        // 找到顯示已選座位的標籤（假設是第一個選項卡中第一個面板的第二個組件中的第二個組件）
+        JPanel bookingPanel = (JPanel) tabbedPane.getComponentAt(0);
+        JPanel bookingActionPanel = (JPanel) bookingPanel.getComponent(1);
+        JPanel seatSelectionPanel = (JPanel) bookingActionPanel.getComponent(0);
+        JPanel selectedSeatsDisplayPanel = (JPanel) seatSelectionPanel.getComponent(1);
+        JLabel selectedSeatsValueLabel = (JLabel) selectedSeatsDisplayPanel.getComponent(1);
+        
+        if (selectedSeats.isEmpty()) {
+            selectedSeatsValueLabel.setText("(尚未選擇)");
+        } else {
+            String seatsText = String.join(", ", selectedSeats);
+            selectedSeatsValueLabel.setText(seatsText);
+        }
     }
 
     private void loadMovies() {
@@ -199,18 +284,14 @@ public class UserMenuPanel extends JPanel {
         }
     }
 
-     private void clearBookingSelection() {
+    private void clearBookingSelection() {
         selectedShowtime = null;
+        selectedSeats.clear(); // 清除已選座位
         showtimesTable.clearSelection();
-        seatsField.setText("");
-        seatsField.setEnabled(false);
-        bookButton.setEnabled(false);
+        selectSeatsButton.setEnabled(false); // 禁用選擇座位按鈕
+        bookButton.setEnabled(false); // 禁用訂票按鈕
+        updateSelectedSeatsDisplay(); // 更新顯示
     }
-
-    private void checkBookButtonState() {
-         bookButton.setEnabled(selectedShowtime != null && !seatsField.getText().trim().isEmpty());
-    }
-
 
     private void handleBooking() {
         if (selectedShowtime == null) {
@@ -221,41 +302,29 @@ public class UserMenuPanel extends JPanel {
              JOptionPane.showMessageDialog(this, "請先選擇一部電影", "訂票錯誤", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
-        String seatsInput = seatsField.getText().trim();
-        if (seatsInput.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "請輸入座位號碼", "訂票錯誤", JOptionPane.WARNING_MESSAGE);
+        if (selectedSeats.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "請選擇至少一個座位", "訂票錯誤", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        // Split seats and trim whitespace
-        List<String> seatNumbers = Arrays.stream(seatsInput.split(","))
-                                         .map(String::trim)
-                                         .filter(s -> !s.isEmpty())
-                                         .collect(Collectors.toList());
-
-        if (seatNumbers.isEmpty()) {
-             JOptionPane.showMessageDialog(this, "請輸入有效的座位號碼", "訂票錯誤", JOptionPane.WARNING_MESSAGE);
-             return;
-        }
-
-
         try {
             // Call the booking service
-            String result = reservationService.bookTickets(currentUser.getUid(), selectedShowtime.getUid(), seatNumbers);
+            String result = reservationService.bookTickets(currentUser.getUid(), selectedShowtime.getUid(), selectedSeats);
 
             // Display result
             JOptionPane.showMessageDialog(this, result, "訂票結果", JOptionPane.INFORMATION_MESSAGE);
 
             // If successful, clear fields and refresh relevant data
             if (result.startsWith("訂票成功")) {
-                seatsField.setText("");
+                selectedSeats.clear(); // 清除已選座位
+                updateSelectedSeatsDisplay(); // 更新顯示
                 loadShowtimesForMovie(selectedMovie.getUid()); // Refresh showtimes to show updated seat count
                 loadUserReservations(); // Refresh user's reservations list on the other tab
                 tabbedPane.setSelectedIndex(1); // Switch to reservations tab
+                bookButton.setEnabled(false); // 禁用訂票按鈕
             }
 
-        } catch (IllegalArgumentException ex) { // Removed SeatUnavailableException as bookTickets handles it internally
+        } catch (IllegalArgumentException ex) {
              JOptionPane.showMessageDialog(this, "訂票失敗: " + ex.getMessage(), "訂票失敗", JOptionPane.ERROR_MESSAGE);
         } catch (Exception ex) { // Keep a general catch for other unexpected errors
             JOptionPane.showMessageDialog(this, "訂票時發生未知錯誤: " + ex.getMessage(), "系統錯誤", JOptionPane.ERROR_MESSAGE);
@@ -342,7 +411,16 @@ public class UserMenuPanel extends JPanel {
                     JOptionPane.WARNING_MESSAGE);
 
             if (confirm == JOptionPane.YES_OPTION) {
+                // 取得退票操作前的系統錯誤輸出
+                ByteArrayOutputStream errorStream = new ByteArrayOutputStream();
+                PrintStream oldErr = System.err;
+                System.setErr(new PrintStream(errorStream));
+                
                 boolean success = reservationService.cancelReservation(reservationId, currentUser.getUid());
+                
+                // 恢復標準錯誤輸出並獲取錯誤消息
+                System.setErr(oldErr);
+                String errorMsg = errorStream.toString();
 
                 if (success) {
                     JOptionPane.showMessageDialog(this, "訂票 ID: " + reservationId + " 已成功取消。", "取消成功", JOptionPane.INFORMATION_MESSAGE);
@@ -350,7 +428,25 @@ public class UserMenuPanel extends JPanel {
                     loadUserReservations(); // Refresh the reservations list
                     loadShowtimesForMovie(selectedMovie != null ? selectedMovie.getUid() : -1); // Refresh showtimes on the other tab if a movie is selected
                 } else {
-                    JOptionPane.showMessageDialog(this, "取消失敗。可能原因：\n- 訂票 ID 不存在\n- 此訂票不屬於您\n- 訂票狀態無法取消 (例如已過期或已取消)", "取消失敗", JOptionPane.ERROR_MESSAGE);
+                    String failureReason = "取消失敗。";
+                    
+                    // 解析錯誤訊息
+                    if (errorMsg.contains("Cannot cancel ticket within 30 minutes before showtime")) {
+                        failureReason += "\n無法在電影開始前30分鐘內取消訂票。";
+                    } else if (errorMsg.contains("Cannot cancel ticket after showtime has started")) {
+                        failureReason += "\n無法在電影已開始放映後取消訂票。";
+                    } else if (errorMsg.contains("does not belong to member")) {
+                        failureReason += "\n此訂票不屬於您的帳號。";
+                    } else if (errorMsg.contains("Reservation with ID") && errorMsg.contains("not found")) {
+                        failureReason += "\n找不到指定的訂票 ID。";
+                    } else if (errorMsg.contains("already cancelled")) {
+                        failureReason += "\n此訂票已經被取消。";
+                    } else {
+                        // 一般性失敗原因
+                        failureReason += "\n可能原因：\n- 訂票 ID 不存在\n- 此訂票不屬於您\n- 訂票狀態無法取消 (例如已過期或已取消)";
+                    }
+                    
+                    JOptionPane.showMessageDialog(this, failureReason, "取消失敗", JOptionPane.ERROR_MESSAGE);
                 }
             }
         } catch (NumberFormatException ex) {

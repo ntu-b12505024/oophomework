@@ -22,4 +22,13 @@ public class MemberService {
         }
         return null;
     }
+    
+    /**
+     * 透過會員ID查詢會員資料
+     * @param uid 會員ID
+     * @return 會員物件，如果找不到則返回null
+     */
+    public Member getMemberById(int uid) {
+        return memberDAO.getMemberByUid(uid);
+    }
 }

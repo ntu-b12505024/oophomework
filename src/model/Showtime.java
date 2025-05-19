@@ -74,6 +74,15 @@ public class Showtime {
         return getTime();
     }
 
+    /**
+     * Returns the theater name associated with this showtime.
+     * @return theater name as string
+     */
+    public String getTheaterName() {
+        Theater theater = getTheater();
+        return theater != null ? theater.getType() : "未知影廳";
+    }
+
     @Override
     public String toString() {
         return String.format("Showtime [ID: %d, MovieID: %d, TheaterID: %d, Time: %s, Available Seats: %d]",

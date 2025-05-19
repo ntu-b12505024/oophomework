@@ -2,18 +2,22 @@ package model;
 
 import java.util.Collections;
 import java.util.List;
+import service.MovieService;
 import service.ShowtimeService;
+import service.TheaterService;
 
 public class Reservation {
     private int uid;
     private int memberUid;
-    private int movieUid; // 新增電影 UID
-    private int theaterUid; // 新增放映廳 UID
-    private String time; // 新增時間屬性
-    private String seatNo; // 新增座位屬性
+    private int movieUid; 
+    private int theaterUid; 
+    private String time; 
+    private String seatNo; 
     private String status;
-    private int numTickets; // 新增票數屬性
+    private int numTickets;
+    private int showtimeUid; // 新增場次 UID
 
+    // 更新建構函數，新增 showtimeUid 參數
     public Reservation(int uid, int memberUid, int movieUid, int theaterUid, String time, String seatNo, String status, int numTickets) {
         this.uid = uid;
         this.memberUid = memberUid;
@@ -23,6 +27,8 @@ public class Reservation {
         this.seatNo = seatNo;
         this.status = status;
         this.numTickets = numTickets;
+        // 將場次 UID 設為 theaterUid 欄位值
+        this.showtimeUid = theaterUid;
     }
 
     public int getUid() {
@@ -107,7 +113,28 @@ public class Reservation {
      * Returns the showtime UID for this reservation.
      */
     public int getShowtimeUid() {
-        return theaterUid; // returns the underlying theaterUid repurposed
+        // 修正：返回真正的場次ID而非影廳ID
+        return showtimeUid; 
+    }
+
+    /**
+     * 設置場次 UID
+     */
+    public void setShowtimeUid(int showtimeUid) {
+        this.showtimeUid = showtimeUid;
+    }
+
+    /**
+     * 取得關聯的電影
+     */
+    public Movie getMovie() {
+        try {
+            MovieService movieService = new MovieService();
+            return movieService.getMovieById(movieUid).orElse(null);
+        } catch (Exception e) {
+            System.err.println("無法獲取電影資訊，電影ID: " + movieUid + "，錯誤: " + e.getMessage());
+            return null;
+        }
     }
 
     @Override

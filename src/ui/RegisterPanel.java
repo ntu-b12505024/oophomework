@@ -4,6 +4,10 @@ import service.MemberService;
 
 import javax.swing.*;
 import java.awt.*;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
+import com.toedter.calendar.JDateChooser; // 需要添加 jcalendar 庫
 
 public class RegisterPanel extends JPanel {
 
@@ -13,9 +17,10 @@ public class RegisterPanel extends JPanel {
     private JTextField emailField;
     private JPasswordField passwordField;
     private JPasswordField confirmPasswordField;
-    private JTextField birthDateField; // 使用 JTextField 方便格式提示
+    private JDateChooser birthDateChooser; // 使用 JDateChooser 替代 JTextField
     private JButton registerButton;
     private JButton backToLoginButton;
+    private Calendar calendar; // 定義為類成員變數
 
     public RegisterPanel(CinemaBookingGUI mainGUI, MemberService memberService) {
         this.mainGUI = mainGUI;
@@ -35,8 +40,21 @@ public class RegisterPanel extends JPanel {
         passwordField = new JPasswordField(25);
         JLabel confirmPasswordLabel = new JLabel("Confirm Password:");
         confirmPasswordField = new JPasswordField(25);
-        JLabel birthDateLabel = new JLabel("Birth Date (YYYY-MM-DD):");
-        birthDateField = new JTextField(25);
+        
+        // 創建日期選擇器
+        JLabel birthDateLabel = new JLabel("出生日期:");
+        birthDateChooser = new JDateChooser();
+        birthDateChooser.setDateFormatString("yyyy-MM-dd");
+        birthDateChooser.setPreferredSize(new Dimension(200, 20));
+        
+        // 設置日期選擇器的最大日期為當前日期(不能選擇未來日期)
+        birthDateChooser.setMaxSelectableDate(new Date());
+        
+        // 設置默認日期為18年前
+        calendar = Calendar.getInstance();
+        calendar.add(Calendar.YEAR, -18);
+        birthDateChooser.setDate(calendar.getTime());
+        
         registerButton = new JButton("註冊");
         backToLoginButton = new JButton("返回登入");
 
@@ -66,7 +84,7 @@ public class RegisterPanel extends JPanel {
         gbc.gridx = 0; gbc.gridy = 4; gbc.anchor = GridBagConstraints.EAST;
         add(birthDateLabel, gbc);
         gbc.gridx = 1; gbc.gridy = 4; gbc.anchor = GridBagConstraints.WEST;
-        add(birthDateField, gbc);
+        add(birthDateChooser, gbc);
 
         // Buttons Panel
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 10));
@@ -85,9 +103,11 @@ public class RegisterPanel extends JPanel {
         String email = emailField.getText().trim();
         String password = new String(passwordField.getPassword());
         String confirmPassword = new String(confirmPasswordField.getPassword());
-        String birthDate = birthDateField.getText().trim();
-
-        if (email.isEmpty() || password.isEmpty() || confirmPassword.isEmpty() || birthDate.isEmpty()) {
+        
+        // 從日期選擇器獲取日期
+        Date birthDate = birthDateChooser.getDate();
+        
+        if (email.isEmpty() || password.isEmpty() || confirmPassword.isEmpty() || birthDate == null) {
             JOptionPane.showMessageDialog(this, "所有欄位皆為必填", "註冊錯誤", JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -100,21 +120,21 @@ public class RegisterPanel extends JPanel {
             return;
         }
 
-        // 簡單的日期格式驗證 (可考慮使用更嚴謹的正規表示式或 DateFormat)
-        if (!birthDate.matches("^\\d{4}-\\d{2}-\\d{2}$")) {
-             JOptionPane.showMessageDialog(this, "出生日期格式錯誤，請使用 YYYY-MM-DD 格式", "註冊錯誤", JOptionPane.WARNING_MESSAGE);
-             birthDateField.requestFocus();
-             return;
-        }
+        // 格式化日期為 YYYY-MM-DD
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        String birthDateStr = sdf.format(birthDate);
 
         try {
-            memberService.register(email, password, birthDate);
+            memberService.register(email, password, birthDateStr);
             JOptionPane.showMessageDialog(this, "註冊成功！請返回登入頁面進行登入。", "成功", JOptionPane.INFORMATION_MESSAGE);
             // 清空欄位並返回登入頁面
             emailField.setText("");
             passwordField.setText("");
             confirmPasswordField.setText("");
-            birthDateField.setText("");
+            // 重置為預設日期
+            calendar = Calendar.getInstance();
+            calendar.add(Calendar.YEAR, -18);
+            birthDateChooser.setDate(calendar.getTime());
             mainGUI.showLoginPanel();
         } catch (IllegalArgumentException ex) {
             JOptionPane.showMessageDialog(this, "註冊失敗: " + ex.getMessage(), "註冊失敗", JOptionPane.ERROR_MESSAGE);
