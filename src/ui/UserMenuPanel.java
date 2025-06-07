@@ -12,6 +12,9 @@ import exception.SeatUnavailableException;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.text.SimpleDateFormat;
+import java.text.ParseException;
+import java.util.Date;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -364,6 +367,10 @@ public class UserMenuPanel extends JPanel {
 
         cancelReservationButton.addActionListener(e -> handleCancelReservation());
 
+        // 在取消訂票介面上方新增退票說明
+        JLabel cancelInfoLabel = new JLabel("提示：電影播映前60分鐘內退票需支付手續費，且電影播映前30分鐘內無法退票。");
+        panel.add(cancelInfoLabel, BorderLayout.NORTH);
+
         // --- Layout ---
         panel.add(reservationsListPanel, BorderLayout.CENTER);
         panel.add(cancelPanel, BorderLayout.SOUTH);
@@ -403,7 +410,40 @@ public class UserMenuPanel extends JPanel {
         try {
             int reservationId = Integer.parseInt(idText);
 
-            // Confirmation dialog
+            // 先檢查退票時間
+            Reservation targetRes = reservationService.listReservationsByMember(currentUser.getUid())
+                    .stream().filter(r -> r.getUid() == reservationId).findFirst().orElse(null);
+            if (targetRes == null) {
+                JOptionPane.showMessageDialog(this, "找不到指定的訂票 ID。", "錯誤", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            Showtime targetSt = showtimeService.getShowtimeById(targetRes.getShowtimeUid());
+            try {
+                SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                Date showDate = fmt.parse(targetSt.getStartTime());
+                long diffMin = (showDate.getTime() - new Date().getTime()) / (60 * 1000);
+                if (diffMin <= 30) {
+                    JOptionPane.showMessageDialog(this,
+                        "無法在電影開始前30分鐘內取消訂票（因臨近放映時間，影廳無法再進行座位調度）。",
+                        "取消失敗",
+                        JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                // 收取手續費區間: 60 到 31 分鐘
+                if (diffMin <= 60) {
+                    int feeConfirm = JOptionPane.showConfirmDialog(this,
+        "退票需支付50元手續費（因退票時間接近放映，需留給其他用戶購票與系統處理時間，並負擔平台手續與票務處理成本），是否要繼續？",
+        "退票手續費",
+        JOptionPane.YES_NO_OPTION,
+        JOptionPane.WARNING_MESSAGE);
+                    if (feeConfirm != JOptionPane.YES_OPTION) {
+                        return;
+                    }
+                }
+            } catch (ParseException pe) {
+                // 日期解析失敗，忽略並繼續
+            }
+            // 原有首次確認對話框
             int confirm = JOptionPane.showConfirmDialog(this,
                     "確定要取消訂票 ID: " + reservationId + " 嗎？此操作無法復原。",
                     "確認取消",
