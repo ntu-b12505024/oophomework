@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import javax.swing.JOptionPane; // Import JOptionPane
 
 public class MovieService {
     private final MovieDAO movieDAO = new MovieDAO();
@@ -159,8 +160,10 @@ public class MovieService {
         String newEnd = st.plusMinutes(duration).format(fmt);
         try {
             if (showtimeDAO.hasConflict(showtime.getUid(), showtime.getTheaterUid(), showtime.getMovieUid(), newTime, newEnd)) {
-                System.err.printf("排程衝突: 影廳 %d 時段 %s - %s\n", showtime.getTheaterUid(), newTime, newEnd);
-                return false;
+                String theaterName = showtime.getTheaterUid() == 1 ? "Hall A" : "Hall B"; // 替換影廳名稱
+                String conflictMessage = String.format("排程衝突: %s 時段 %s - %s", theaterName, newTime, newEnd);
+                JOptionPane.showMessageDialog(null, conflictMessage, "時間衝突", JOptionPane.ERROR_MESSAGE);
+                return false; // 僅顯示衝突訊息，避免其他錯誤訊息
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -182,5 +185,36 @@ public class MovieService {
             }
         }
         return movies;
+    }
+
+    // 新增 addReview 方法
+    public void addReview(int movieId, String userEmail, String reviewText) {
+        // 假設有一個 reviews 資料表，包含 movie_id, user_email, review_text
+        String sql = "INSERT INTO reviews (movie_id, user_email, review_text) VALUES (?, ?, ?)";
+        try (java.sql.Connection conn = util.DBUtil.getConnection(); java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, movieId);
+            stmt.setString(2, userEmail);
+            stmt.setString(3, reviewText);
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("新增評論時發生錯誤: " + e.getMessage(), e);
+        }
+    }
+
+    // 新增 getReviewsByMovieId 方法
+    public List<String[]> getReviewsByMovieId(int movieId) {
+        List<String[]> reviews = new java.util.ArrayList<>();
+        String sql = "SELECT user_email, review_text FROM reviews WHERE movie_id = ?";
+        try (java.sql.Connection conn = util.DBUtil.getConnection(); java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, movieId);
+            try (java.sql.ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    reviews.add(new String[]{rs.getString("user_email"), rs.getString("review_text")});
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("獲取評論時發生錯誤: " + e.getMessage(), e);
+        }
+        return reviews;
     }
 }

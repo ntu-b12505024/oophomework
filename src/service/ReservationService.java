@@ -20,6 +20,8 @@ import java.text.ParseException;
 import java.util.Date;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -429,5 +431,44 @@ public class ReservationService {
                 e.printStackTrace();
             }
         }
+    }
+
+    // 新增評論相關方法
+    // 確保評論能正常提交並讓所有使用者都能看到
+    public void addReview(int movieId, String userEmail, String reviewText) throws SQLException {
+        String sql = "INSERT INTO reviews (movie_id, user_email, review_text) VALUES (?, ?, ?)";
+        try (Connection conn = DBUtil.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, movieId);
+            stmt.setString(2, userEmail);
+            stmt.setString(3, reviewText);
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            System.err.println("SQL錯誤: " + e.getMessage());
+            throw new SQLException("無法提交評論，請檢查資料庫連線或查詢語法。", e);
+        } catch (Exception e) {
+            System.err.println("未知錯誤: " + e.getMessage());
+            throw new RuntimeException("提交評論時發生未知錯誤。", e);
+        }
+    }
+
+    // 增加詳細的例外處理和日誌
+    public List<String[]> getReviewsByMovieId(int movieId) throws SQLException {
+        List<String[]> reviews = new ArrayList<>();
+        String sql = "SELECT user_email, review_text FROM reviews WHERE movie_id = ? ORDER BY id ASC"; // 確保評論按順序顯示
+        try (Connection conn = DBUtil.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, movieId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    reviews.add(new String[]{rs.getString("user_email"), rs.getString("review_text")});
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("SQL錯誤: " + e.getMessage());
+            throw new SQLException("無法載入評論，請檢查資料庫連線或查詢語法。", e);
+        } catch (Exception e) {
+            System.err.println("未知錯誤: " + e.getMessage());
+            throw new RuntimeException("載入評論時發生未知錯誤。", e);
+        }
+        return reviews;
     }
 }

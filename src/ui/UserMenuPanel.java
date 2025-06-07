@@ -9,12 +9,19 @@ import service.ReservationService;
 import service.ShowtimeService;
 import exception.AgeRestrictionException;
 import exception.SeatUnavailableException;
+import util.DBUtil;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.text.ParseException;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -54,6 +61,18 @@ public class UserMenuPanel extends JPanel {
     private JTextField reservationIdToCancelField;
     private JButton cancelReservationButton;
 
+    // 定義 reviewTableModel
+    private DefaultTableModel reviewTableModel = new DefaultTableModel(new String[]{"使用者", "評論"}, 0) {
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        }
+    };
+
+    // 使用暫存評論的方式來顯示評論
+    private List<String[]> temporaryReviews = new ArrayList<>(); // 暫存評論
+    // 更新評論邏輯，確保每部電影有不同的留言串
+    private Map<Integer, List<String[]>> movieReviews = new HashMap<>(); // 每部電影的評論暫存
 
     public UserMenuPanel(CinemaBookingGUI mainGUI, ReservationService reservationService, MovieService movieService, ShowtimeService showtimeService, Member currentUser) {
         this.mainGUI = mainGUI;
@@ -114,6 +133,7 @@ public class UserMenuPanel extends JPanel {
                 selectedMovie = movieService.getMovieById(movieId).orElse(null); // Get full movie object
                 loadShowtimesForMovie(movieId);
                 clearBookingSelection(); // Clear previous showtime/seat selection
+                loadReviewsForMovie(movieId); // Load reviews for the selected movie
             }
         });
         JScrollPane moviesScrollPane = new JScrollPane(moviesTable);
@@ -177,6 +197,9 @@ public class UserMenuPanel extends JPanel {
 
         panel.add(movieShowtimeSplit, BorderLayout.CENTER);
         panel.add(bookingActionPanel, BorderLayout.SOUTH);
+
+        // 添加評論區
+        createReviewPanel(panel);
 
         return panel;
     }
@@ -376,6 +399,84 @@ public class UserMenuPanel extends JPanel {
         panel.add(cancelPanel, BorderLayout.SOUTH);
 
         return panel;
+    }
+
+    // 更新評論邏輯，使用資料庫存儲和讀取評論
+    private void createReviewPanel(JPanel panel) {
+        JPanel reviewPanel = new JPanel(new BorderLayout(10, 10));
+        reviewPanel.setBorder(BorderFactory.createTitledBorder("電影評論"));
+
+        // 顯示評論區
+        reviewTableModel = new DefaultTableModel(new String[]{"使用者", "評論"}, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        JTable reviewTable = new JTable(reviewTableModel);
+        JScrollPane reviewScrollPane = new JScrollPane(reviewTable);
+        reviewPanel.add(reviewScrollPane, BorderLayout.CENTER);
+
+        // 新增評論區
+        JPanel addReviewPanel = new JPanel(new BorderLayout(5, 5));
+        JTextField reviewField = new JTextField();
+        JButton submitReviewButton = new JButton("提交評論");
+        submitReviewButton.addActionListener(e -> {
+            if (selectedMovie == null) {
+                JOptionPane.showMessageDialog(this, "請先選擇一部電影", "評論錯誤", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            String reviewText = reviewField.getText().trim();
+            if (reviewText.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "評論內容不可為空", "評論錯誤", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            try {
+                reservationService.addReview(selectedMovie.getUid(), currentUser.getEmail(), reviewText); // 存入資料庫
+                reviewField.setText("");
+                JOptionPane.showMessageDialog(this, "評論已成功提交", "提交成功", JOptionPane.INFORMATION_MESSAGE);
+                loadReviewsForMovie(selectedMovie.getUid());
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "提交評論時發生錯誤: " + ex.getMessage(), "提交失敗", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        addReviewPanel.add(reviewField, BorderLayout.CENTER);
+        addReviewPanel.add(submitReviewButton, BorderLayout.EAST);
+        reviewPanel.add(addReviewPanel, BorderLayout.SOUTH);
+
+        // 在電影選擇面板下方新增評論面板
+        panel.add(reviewPanel, BorderLayout.EAST);
+    }
+
+    private void loadReviewsForMovie(int movieId) {
+        reviewTableModel.setRowCount(0); // 清空現有評論
+        try {
+            // 首先檢查資料庫連線
+            try (Connection testConn = DBUtil.getConnection()) {
+                // 檢查 reviews 表是否存在
+                DatabaseMetaData metaData = testConn.getMetaData();
+                try (ResultSet rs = metaData.getTables(null, null, "reviews", null)) {
+                    if (!rs.next()) {
+                        // 如果表不存在，先創建它
+                        DBUtil.ensureReviewsTableExists();
+                    }
+                }
+            }
+            
+            List<String[]> reviews = reservationService.getReviewsByMovieId(movieId); // 從資料庫讀取評論
+            for (String[] review : reviews) {
+                reviewTableModel.addRow(review);
+            }
+        } catch (SQLException e) {
+            System.err.println("資料庫連線錯誤: " + e.getMessage());
+            // 如果資料庫有問題，顯示預設訊息
+            reviewTableModel.addRow(new String[]{"系統", "目前無法載入評論，請稍後再試"});
+        } catch (Exception ex) {
+            System.err.println("載入評論時發生錯誤: " + ex.getMessage());
+            ex.printStackTrace();
+            // 顯示錯誤訊息而不是彈出對話框
+            reviewTableModel.addRow(new String[]{"系統", "載入評論時發生錯誤: " + ex.getMessage()});
+        }
     }
 
     private void loadUserReservations() {

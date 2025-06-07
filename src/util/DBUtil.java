@@ -1,9 +1,12 @@
 package util;
 
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import org.mindrot.jbcrypt.BCrypt;
 
 public class DBUtil {
@@ -32,12 +35,14 @@ public class DBUtil {
             conn.createStatement().execute("DROP TABLE IF EXISTS theater;");
             conn.createStatement().execute("DROP TABLE IF EXISTS movie;");
             conn.createStatement().execute("DROP TABLE IF EXISTS member;");
+            conn.createStatement().execute("DROP TABLE IF EXISTS reviews;"); // 新增清除評論表
             System.out.println("Database cleared successfully.");
         } catch (SQLException e) {
             e.printStackTrace();
         }
     }
 
+    // 確保在初始化資料庫時重新建立 reviews 表
     public static void initializeDatabase() {
         try (Connection conn = getConnection()) {
             if (conn != null) {
@@ -174,72 +179,51 @@ public class DBUtil {
                 try (PreparedStatement stmt = conn.prepareStatement(insertShowtimes)) {
                     stmt.setString(1, "Star Wars");
                     stmt.setString(2, "Hall A");
-                    stmt.setString(3, "2025-05-10 14:00");
-                    stmt.setString(4, "2025-05-10 14:00");
+                    stmt.setString(3, "2025-06-10 14:00");
+                    stmt.setString(4, "2025-06-10 14:00");
                     stmt.setInt(5, 100);
                     stmt.addBatch();
 
                     stmt.setString(1, "Zootopia");
                     stmt.setString(2, "Hall B");
-                    stmt.setString(3, "2025-05-10 15:00");
-                    stmt.setString(4, "2025-05-10 15:00");
+                    stmt.setString(3, "2025-06-10 15:00");
+                    stmt.setString(4, "2025-06-10 15:00");
                     stmt.setInt(5, 50);
                     stmt.addBatch();
 
                     stmt.setString(1, "Inception");
                     stmt.setString(2, "Hall A");
-                    stmt.setString(3, "2025-05-11 16:00");
-                    stmt.setString(4, "2025-05-11 16:00");
+                    stmt.setString(3, "2025-06-11 16:00");
+                    stmt.setString(4, "2025-06-11 16:00");
                     stmt.setInt(5, 100);
                     stmt.addBatch();
 
                     stmt.setString(1, "The Godfather");
                     stmt.setString(2, "Hall B");
-                    stmt.setString(3, "2025-05-11 17:00");
-                    stmt.setString(4, "2025-05-11 17:00");
+                    stmt.setString(3, "2025-06-11 17:00");
+                    stmt.setString(4, "2025-06-11 17:00");
                     stmt.setInt(5, 50);
                     stmt.addBatch();
 
                     stmt.setString(1, "Frozen");
                     stmt.setString(2, "Hall A");
-                    stmt.setString(3, "2025-05-12 18:00");
-                    stmt.setString(4, "2025-05-12 18:00");
+                    stmt.setString(3, "2025-06-12 18:00");
+                    stmt.setString(4, "2025-06-12 18:00");
                     stmt.setInt(5, 100);
                     stmt.addBatch();
 
                     stmt.setString(1, "Avengers: Endgame");
                     stmt.setString(2, "Hall B");
-                    stmt.setString(3, "2025-05-12 19:00");
-                    stmt.setString(4, "2025-05-12 19:00");
+                    stmt.setString(3, "2025-06-12 19:00");
+                    stmt.setString(4, "2025-06-12 19:00");
                     stmt.setInt(5, 50);
                     stmt.addBatch();
 
                     stmt.executeBatch();
                 }
 
-                // 使用 ShowtimeService 為 Hall A 新增預設場次，以正確處理結束時間並避免衝突
-                {
-                    // 引入所需服務與 DAO
-                    service.ShowtimeService showtimeService = new service.ShowtimeService();
-                    dao.MovieDAO movieDAO = new dao.MovieDAO();
-                    dao.TheaterDAO theaterDAO = new dao.TheaterDAO();
-                    // 取得 Hall A 的 ID
-                    int hallAId = theaterDAO.getTheaterById(theaterDAO.getTheaterByType("Hall A").getUid()).getUid();
-                    // 預設電影及場次時間
-                    String[][] hallAShowtimes = {
-                        {"Star Wars", "2025-05-10 14:00"},
-                        {"Inception", "2025-05-11 16:00"},
-                        {"Frozen", "2025-05-12 18:00"}
-                    };
-                    for (String[] entry : hallAShowtimes) {
-                        String movieName = entry[0];
-                        String time = entry[1];
-                        model.Movie movie = movieDAO.getMovieByName(movieName);
-                        if (movie != null) {
-                            showtimeService.addShowtime(movie.getUid(), hallAId, time);
-                        }
-                    }
-                }
+                // 首先確保 reviews 表存在
+                ensureReviewsTableExists();
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -257,9 +241,50 @@ public class DBUtil {
         }
     }
 
+    public static void ensureReviewsTableExists() {
+        try (Connection conn = getConnection()) {
+            DatabaseMetaData metaData = conn.getMetaData();
+            try (ResultSet rs = metaData.getTables(null, null, "reviews", null)) {
+                if (!rs.next()) {
+                    // Table does not exist, create it
+                    String createTableSQL = "CREATE TABLE reviews (" +
+                            "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                            "movie_id INTEGER NOT NULL," +
+                            "user_email TEXT NOT NULL," +
+                            "review_text TEXT NOT NULL," +
+                            "FOREIGN KEY(movie_id) REFERENCES movie(uid)" +
+                            ");";
+                    try (Statement stmt = conn.createStatement()) {
+                        stmt.execute(createTableSQL);
+                        System.out.println("Table 'reviews' created successfully.");
+                    }
+                } else {
+                    System.out.println("Table 'reviews' already exists.");
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Error ensuring 'reviews' table exists: " + e.getMessage(), e);
+        }
+    }
+
+    public static void printReviewsTable() {
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT * FROM reviews")) {
+            System.out.println("Reviews Table:");
+            while (rs.next()) {
+                System.out.printf("ID: %d, Movie ID: %d, User Email: %s, Review Text: %s\n",
+                        rs.getInt("id"), rs.getInt("movie_id"), rs.getString("user_email"), rs.getString("review_text"));
+            }
+        } catch (SQLException e) {
+            System.err.println("Error reading 'reviews' table: " + e.getMessage());
+        }
+    }
+
     public static void main(String[] args) {
         System.out.println("Initializing database...");
         initializeDatabase();
+        ensureReviewsTableExists();
         System.out.println("Database initialized successfully.");
     }
 }
