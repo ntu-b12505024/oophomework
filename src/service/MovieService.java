@@ -2,18 +2,18 @@ package service;
 
 import dao.MovieDAO;
 import dao.ShowtimeDAO; // Import ShowtimeDAO
-import dao.TheaterDAO; // Import TheaterDAO
 import model.Movie;
 import model.Showtime;
-import model.Theater; // Import Theater
 
 import java.util.List;
 import java.util.Optional;
+import java.sql.SQLException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 public class MovieService {
     private final MovieDAO movieDAO = new MovieDAO();
     private final ShowtimeDAO showtimeDAO = new ShowtimeDAO(); // Add ShowtimeDAO
-    private final TheaterDAO theaterDAO = new TheaterDAO(); // Add TheaterDAO
 
     /**
      * Adds a new movie.
@@ -132,7 +132,7 @@ public class MovieService {
                 System.out.println("  Showtimes:");
                 for (Showtime showtime : showtimes) {
                     System.out.printf("    - ID: %d | Time: %s | Available Seats: %d\n",
-                                      showtime.getUid(), showtime.getTime(),
+                                      showtime.getUid(), showtime.getShowTime(),
                                       showtime.getAvailableSeats());
                 }
             }
@@ -144,24 +144,30 @@ public class MovieService {
         return Optional.ofNullable(movieDAO.getMovieByName(name));
     }
 
+    /**
+     * Updates the start time (and recalculates end time) of a showtime.
+     */
     public boolean updateShowtimeTime(int showtimeId, String newTime) {
         Showtime showtime = showtimeDAO.getShowtimeById(showtimeId);
         if (showtime == null) {
             System.err.println("Showtime not found.");
             return false;
         }
-
-        // 檢查時間衝突
-        List<Showtime> theaterShowtimes = showtimeDAO.getShowtimesByTheaterId(showtime.getTheaterUid());
-        for (Showtime existingShowtime : theaterShowtimes) {
-            if (existingShowtime.getUid() != showtimeId && existingShowtime.getTime().equals(newTime)) {
-                System.err.println("Time conflict detected with another showtime.");
+        int duration = movieDAO.getMovieById(showtime.getMovieUid()).getDuration();
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+        LocalDateTime st = LocalDateTime.parse(newTime, fmt);
+        String newEnd = st.plusMinutes(duration).format(fmt);
+        try {
+            if (showtimeDAO.hasConflict(showtime.getUid(), showtime.getTheaterUid(), showtime.getMovieUid(), newTime, newEnd)) {
+                System.err.printf("排程衝突: 影廳 %d 時段 %s - %s\n", showtime.getTheaterUid(), newTime, newEnd);
                 return false;
             }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
         }
-
-        // 更新場次時間
-        showtime.setTime(newTime);
+        showtime.setStartTime(newTime);
+        showtime.setEndTime(newEnd);
         return showtimeDAO.updateShowtime(showtime);
     }
 
@@ -172,7 +178,7 @@ public class MovieService {
             System.out.println("Movie: " + movie.getName());
             for (Showtime showtime : showtimes) {
                 System.out.printf("  Showtime: %s | Theater: %d | Available Seats: %d\n",
-                                  showtime.getTime(), showtime.getTheaterUid(), showtime.getAvailableSeats());
+                                  showtime.getShowTime(), showtime.getTheaterUid(), showtime.getAvailableSeats());
             }
         }
         return movies;

@@ -17,11 +17,83 @@ public class ShowtimeDAO {
     private final TheaterDAO theaterDAO = new TheaterDAO(); // Instantiate TheaterDAO
 
     /**
+     * 檢查影廳或電影時間衝突，排除指定場次（可為 null）
+     */
+    public boolean hasConflict(Integer excludeUid,int theaterUid,int movieUid,String newStart,String newEnd)throws SQLException{
+        return hasTheaterConflict(excludeUid,theaterUid,newStart,newEnd)
+            || hasMovieConflict(excludeUid,movieUid,newStart,newEnd);
+    }
+
+    // 檢查同影廳時間衝突
+    private boolean hasTheaterConflict(Integer excludeUid,int theaterUid,String newStart,String newEnd) {
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+        java.time.LocalDateTime ns = java.time.LocalDateTime.parse(newStart, fmt);
+        java.time.LocalDateTime ne = java.time.LocalDateTime.parse(newEnd, fmt);
+        List<Showtime> existing = getShowtimesByTheaterId(theaterUid);
+        for (Showtime st : existing) {
+            if (excludeUid != null && st.getUid() == excludeUid) continue;
+            java.time.LocalDateTime es = java.time.LocalDateTime.parse(st.getStartTime(), fmt);
+            java.time.LocalDateTime ee = java.time.LocalDateTime.parse(st.getEndTime(), fmt);
+            if (ns.isBefore(ee) && ne.isAfter(es)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // 檢查同電影時間衝突（跨所有影廳）
+    private boolean hasMovieConflict(Integer excludeUid,int movieUid,String newStart,String newEnd) {
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+        java.time.LocalDateTime ns = java.time.LocalDateTime.parse(newStart, fmt);
+        java.time.LocalDateTime ne = java.time.LocalDateTime.parse(newEnd, fmt);
+        List<Showtime> existing = getShowtimesByMovieId(movieUid);
+        for (Showtime st : existing) {
+            if (excludeUid != null && st.getUid() == excludeUid) continue;
+            java.time.LocalDateTime es = java.time.LocalDateTime.parse(st.getStartTime(), fmt);
+            java.time.LocalDateTime ee = java.time.LocalDateTime.parse(st.getEndTime(), fmt);
+            if (ns.isBefore(ee) && ne.isAfter(es)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 檢查影廳是否正在使用（當前時間有場次進行中）
+     * @param theaterUid 影廳 ID
+     * @return 如果當前時間有場次則返回 true，否則返回 false
+     */
+    public boolean isTheaterInUse(int theaterUid) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM showtime WHERE theater_uid = ? AND start_time <= ? AND end_time >= ?";
+        try (Connection conn = DBUtil.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            String now = java.time.LocalDateTime.now()
+                            .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+            stmt.setInt(1, theaterUid);
+            stmt.setString(2, now);
+            stmt.setString(3, now);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next() && rs.getInt(1) > 0;
+            }
+        }
+    }
+
+    /**
      * Adds a new showtime to the database, initializing available seats based on the theater.
      * @param showtime The Showtime object to add (UID can be 0).
      * @return The generated UID of the newly added showtime, or -1 on failure.
      */
     public int addShowtime(Showtime showtime) {
+        // 時段衝突檢查
+        try {
+            if (hasConflict(null, showtime.getTheaterUid(), showtime.getMovieUid(), showtime.getStartTime(), showtime.getEndTime())) {
+                System.err.println("排程衝突: 電影 " + showtime.getMovieUid() + " 時段 " + showtime.getStartTime() + " - " + showtime.getEndTime());
+                return -1;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return -1;
+        }
         Theater theater = theaterDAO.getTheaterById(showtime.getTheaterUid());
         if (theater == null) {
             System.err.println("Error adding showtime: Theater with UID " + showtime.getTheaterUid() + " not found.");
@@ -29,13 +101,14 @@ public class ShowtimeDAO {
         }
         int initialAvailableSeats = theater.getTotalSeats();
 
-        String sql = "INSERT INTO showtime (movie_uid, theater_uid, time, available_seats) VALUES (?, ?, ?, ?)";
+        String sql = "INSERT INTO showtime (movie_uid, theater_uid, start_time, end_time, available_seats) VALUES (?, ?, ?, ?, ?)";
         try (Connection conn = DBUtil.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) { // Add RETURN_GENERATED_KEYS
             stmt.setInt(1, showtime.getMovieUid());
             stmt.setInt(2, showtime.getTheaterUid());
-            stmt.setString(3, showtime.getTime());
-            stmt.setInt(4, initialAvailableSeats);
+            stmt.setString(3, showtime.getStartTime());
+            stmt.setString(4, showtime.getEndTime());
+            stmt.setInt(5, initialAvailableSeats);
             int affectedRows = stmt.executeUpdate();
 
             if (affectedRows == 0) {
@@ -59,7 +132,7 @@ public class ShowtimeDAO {
     }
 
     public Showtime getShowtimeById(int id) {
-        String sql = "SELECT * FROM showtime WHERE uid = ?";
+        String sql = "SELECT uid, movie_uid, theater_uid, start_time, end_time, available_seats FROM showtime WHERE uid = ?";
         try (Connection conn = DBUtil.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, id);
@@ -76,7 +149,7 @@ public class ShowtimeDAO {
 
     public List<Showtime> getAllShowtimes() {
         List<Showtime> showtimes = new ArrayList<>();
-        String sql = "SELECT * FROM showtime ORDER BY time"; // Order by time
+        String sql = "SELECT uid, movie_uid, theater_uid, start_time, end_time, available_seats FROM showtime ORDER BY start_time"; // Order by start_time
         try (Connection conn = DBUtil.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
@@ -91,7 +164,7 @@ public class ShowtimeDAO {
 
     public List<Showtime> getShowtimesByMovieId(int movieId) {
         List<Showtime> showtimes = new ArrayList<>();
-        String query = "SELECT * FROM showtime WHERE movie_uid = ? ORDER BY time"; // Order by time
+        String query = "SELECT uid, movie_uid, theater_uid, start_time, end_time, available_seats FROM showtime WHERE movie_uid = ? ORDER BY start_time"; // Order by start_time
         try (Connection conn = DBUtil.getConnection();
              PreparedStatement stmt = conn.prepareStatement(query)) {
             stmt.setInt(1, movieId);
@@ -112,7 +185,7 @@ public class ShowtimeDAO {
      */
     public List<Showtime> getShowtimesByTheaterId(int theaterId) {
         List<Showtime> showtimes = new ArrayList<>();
-        String query = "SELECT * FROM showtime WHERE theater_uid = ? ORDER BY time";
+        String query = "SELECT uid, movie_uid, theater_uid, start_time, end_time, available_seats FROM showtime WHERE theater_uid = ? ORDER BY start_time";
         try (Connection conn = DBUtil.getConnection();
              PreparedStatement stmt = conn.prepareStatement(query)) {
             stmt.setInt(1, theaterId);
@@ -133,14 +206,25 @@ public class ShowtimeDAO {
      * @return true if the update affected 1 row, false otherwise.
      */
     public boolean updateShowtime(Showtime showtime) {
-        String sql = "UPDATE showtime SET movie_uid = ?, theater_uid = ?, time = ?, available_seats = ? WHERE uid = ?";
+        // 時段衝突檢查
+        try {
+            if (hasConflict(showtime.getUid(), showtime.getTheaterUid(), showtime.getMovieUid(), showtime.getStartTime(), showtime.getEndTime())) {
+                System.err.println("排程衝突: 電影 " + showtime.getMovieUid() + " 時段 " + showtime.getStartTime() + " - " + showtime.getEndTime());
+                return false;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+        String sql = "UPDATE showtime SET movie_uid = ?, theater_uid = ?, start_time = ?, end_time = ?, available_seats = ? WHERE uid = ?";
         try (Connection conn = DBUtil.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, showtime.getMovieUid());
             stmt.setInt(2, showtime.getTheaterUid());
-            stmt.setString(3, showtime.getTime());
-            stmt.setInt(4, showtime.getAvailableSeats());
-            stmt.setInt(5, showtime.getUid());
+            stmt.setString(3, showtime.getStartTime());
+            stmt.setString(4, showtime.getEndTime());
+            stmt.setInt(5, showtime.getAvailableSeats());
+            stmt.setInt(6, showtime.getUid());
             int rowsAffected = stmt.executeUpdate();
             return rowsAffected > 0;
         } catch (SQLException e) {
@@ -250,8 +334,9 @@ public class ShowtimeDAO {
                 rs.getInt("uid"),
                 rs.getInt("movie_uid"),
                 rs.getInt("theater_uid"),
-                rs.getString("time"),
-                rs.getInt("available_seats") // Include available_seats
+                rs.getString("start_time"),
+                rs.getString("end_time"),
+                rs.getInt("available_seats")
         );
     }
 }

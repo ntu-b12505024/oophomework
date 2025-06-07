@@ -66,7 +66,8 @@ public class DBUtil {
                         "uid INTEGER PRIMARY KEY AUTOINCREMENT," +
                         "movie_uid INTEGER," +
                         "theater_uid INTEGER," +
-                        "time TEXT NOT NULL," +
+                        "start_time TEXT NOT NULL," +
+                        "end_time TEXT NOT NULL," +
                         "available_seats INTEGER NOT NULL DEFAULT 0," +
                         "FOREIGN KEY (movie_uid) REFERENCES movie(uid) ON DELETE CASCADE," +
                         "FOREIGN KEY (theater_uid) REFERENCES theater(uid) ON DELETE CASCADE" +
@@ -169,45 +170,75 @@ public class DBUtil {
                 // conn.createStatement().execute(insertShowtimes);
 
                 // Insert default showtimes
-                String insertShowtimes = "INSERT OR IGNORE INTO showtime (movie_uid, theater_uid, time, available_seats) VALUES ((SELECT uid FROM movie WHERE name = ?), (SELECT uid FROM theater WHERE type = ?), ?, ?)";
+                String insertShowtimes = "INSERT OR IGNORE INTO showtime (movie_uid, theater_uid, start_time, end_time, available_seats) VALUES ((SELECT uid FROM movie WHERE name = ?), (SELECT uid FROM theater WHERE type = ?), ?, ?, ?)";
                 try (PreparedStatement stmt = conn.prepareStatement(insertShowtimes)) {
                     stmt.setString(1, "Star Wars");
                     stmt.setString(2, "Hall A");
                     stmt.setString(3, "2025-05-10 14:00");
-                    stmt.setInt(4, 100);
+                    stmt.setString(4, "2025-05-10 14:00");
+                    stmt.setInt(5, 100);
                     stmt.addBatch();
 
                     stmt.setString(1, "Zootopia");
                     stmt.setString(2, "Hall B");
                     stmt.setString(3, "2025-05-10 15:00");
-                    stmt.setInt(4, 50);
+                    stmt.setString(4, "2025-05-10 15:00");
+                    stmt.setInt(5, 50);
                     stmt.addBatch();
 
                     stmt.setString(1, "Inception");
                     stmt.setString(2, "Hall A");
                     stmt.setString(3, "2025-05-11 16:00");
-                    stmt.setInt(4, 100);
+                    stmt.setString(4, "2025-05-11 16:00");
+                    stmt.setInt(5, 100);
                     stmt.addBatch();
 
                     stmt.setString(1, "The Godfather");
                     stmt.setString(2, "Hall B");
                     stmt.setString(3, "2025-05-11 17:00");
-                    stmt.setInt(4, 50);
+                    stmt.setString(4, "2025-05-11 17:00");
+                    stmt.setInt(5, 50);
                     stmt.addBatch();
 
                     stmt.setString(1, "Frozen");
                     stmt.setString(2, "Hall A");
                     stmt.setString(3, "2025-05-12 18:00");
-                    stmt.setInt(4, 100);
+                    stmt.setString(4, "2025-05-12 18:00");
+                    stmt.setInt(5, 100);
                     stmt.addBatch();
 
                     stmt.setString(1, "Avengers: Endgame");
                     stmt.setString(2, "Hall B");
                     stmt.setString(3, "2025-05-12 19:00");
-                    stmt.setInt(4, 50);
+                    stmt.setString(4, "2025-05-12 19:00");
+                    stmt.setInt(5, 50);
                     stmt.addBatch();
 
                     stmt.executeBatch();
+                }
+
+                // 使用 ShowtimeService 為 Hall A 新增預設場次，以正確處理結束時間並避免衝突
+                {
+                    // 引入所需服務與 DAO
+                    service.ShowtimeService showtimeService = new service.ShowtimeService();
+                    dao.MovieDAO movieDAO = new dao.MovieDAO();
+                    dao.TheaterDAO theaterDAO = new dao.TheaterDAO();
+                    // 取得 Hall A 的 ID
+                    int hallAId = theaterDAO.getTheaterById(theaterDAO.getTheaterByType("Hall A").getUid()).getUid();
+                    // 預設電影及場次時間
+                    String[][] hallAShowtimes = {
+                        {"Star Wars", "2025-05-10 14:00"},
+                        {"Inception", "2025-05-11 16:00"},
+                        {"Frozen", "2025-05-12 18:00"}
+                    };
+                    for (String[] entry : hallAShowtimes) {
+                        String movieName = entry[0];
+                        String time = entry[1];
+                        model.Movie movie = movieDAO.getMovieByName(movieName);
+                        if (movie != null) {
+                            showtimeService.addShowtime(movie.getUid(), hallAId, time);
+                        }
+                    }
                 }
             }
         } catch (SQLException e) {

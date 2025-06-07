@@ -17,11 +17,9 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import com.toedter.calendar.JDateChooser; // 添加 JDateChooser 庫
-import com.toedter.calendar.JSpinnerDateEditor; // 用於顯示時間選擇
 
 public class AdminMenuPanel extends JPanel {
 
@@ -50,6 +48,8 @@ public class AdminMenuPanel extends JPanel {
     private JButton updateShowtimeButton;
     private JComboBox<String> movieComboBoxForAddShowtime; // Field for movie selection in add showtime
     private JDateChooser showtimeTimeChooser; // 替代 showtimeTimeField
+    private JTextField removeShowtimeIdField;
+    private JButton removeShowtimeButton;
 
     // Tab 3: Reservation Management
     private JTable reservationsTable;
@@ -77,6 +77,27 @@ public class AdminMenuPanel extends JPanel {
         JLabel welcomeLabel = new JLabel("管理員模式");
         JButton logoutButton = new JButton("登出");
         logoutButton.addActionListener(e -> mainGUI.showLoginPanel());
+        // 新增「查看電影場次」按鈕
+        JButton btnViewShowtimes = new JButton("查看電影場次");
+        btnViewShowtimes.addActionListener(e -> {
+            StringBuilder sb = new StringBuilder();
+            for (Movie m : movieService.getAllMovies()) {
+                sb.append(String.format("[%d] %s (%d 分鐘)%n", m.getUid(), m.getName(), m.getDuration()));
+                List<Showtime> sts = showtimeService.getShowtimesByMovieId(m.getUid());
+                if (sts.isEmpty()) {
+                    sb.append("   無排程\n");
+                } else {
+                    for (Showtime s : sts) {
+                        sb.append(String.format("   ID:%d 時間:%s 可用座位:%d%n", s.getUid(), s.getShowTime(), s.getAvailableSeats()));
+                    }
+                }
+            }
+            JTextArea ta = new JTextArea(sb.toString());
+            ta.setEditable(false);
+            JOptionPane.showMessageDialog(this, new JScrollPane(ta), "電影場次一覽", JOptionPane.INFORMATION_MESSAGE);
+        });
+        // 在頂部面板中置中顯示此按鈕
+        topPanel.add(btnViewShowtimes, BorderLayout.CENTER);
         topPanel.add(welcomeLabel, BorderLayout.WEST);
         topPanel.add(logoutButton, BorderLayout.EAST);
         add(topPanel, BorderLayout.NORTH);
@@ -263,7 +284,7 @@ public class AdminMenuPanel extends JPanel {
         panel.add(showtimesScrollPane, BorderLayout.CENTER);
 
         // --- Action Panel (Update and Add Showtime) ---
-        JPanel actionPanel = new JPanel(new GridLayout(2, 1, 10, 10));
+        JPanel actionPanel = new JPanel(new GridLayout(3, 1, 10, 10));
 
         // Update Showtime Section
         JPanel updatePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -272,6 +293,8 @@ public class AdminMenuPanel extends JPanel {
         updateShowtimeIdField = new JTextField(5);
         updatePanel.add(updateShowtimeIdField);
         
+        // 使用日期時間選擇器替代文本輸入框
+        updatePanel.add(new JLabel("新時間:"));
         // 使用日期時間選擇器替代文本輸入框
         updatePanel.add(new JLabel("新時間:"));
         updateShowtimeTimeChooser = new JDateChooser();
@@ -348,8 +371,19 @@ public class AdminMenuPanel extends JPanel {
         });
         addPanel.add(addShowtimeButton);
 
+        // 移除場次區域
+        JPanel deletePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        deletePanel.setBorder(BorderFactory.createTitledBorder("移除場次"));
+        deletePanel.add(new JLabel("場次 ID:"));
+        removeShowtimeIdField = new JTextField(5);
+        deletePanel.add(removeShowtimeIdField);
+        removeShowtimeButton = new JButton("移除場次");
+        removeShowtimeButton.addActionListener(e -> handleRemoveShowtime());
+        deletePanel.add(removeShowtimeButton);
+
         actionPanel.add(updatePanel);
         actionPanel.add(addPanel);
+        actionPanel.add(deletePanel);
         panel.add(actionPanel, BorderLayout.SOUTH);
 
         return panel;
@@ -420,6 +454,41 @@ public class AdminMenuPanel extends JPanel {
         }
     }
 
+    /**
+     * 處理移除場次
+     */
+    private void handleRemoveShowtime() {
+        String idStr = removeShowtimeIdField.getText().trim();
+        if (idStr.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "請輸入要移除的場次 ID", "移除錯誤", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        try {
+            int showtimeId = Integer.parseInt(idStr);
+            int confirm = JOptionPane.showConfirmDialog(this,
+                    "確定要移除場次 ID: " + showtimeId + " 嗎？相關的訂票也會被取消！",
+                    "確認移除",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE);
+            if (confirm == JOptionPane.YES_OPTION) {
+                boolean removed = showtimeService.deleteShowtime(showtimeId);
+                if (removed) {
+                    JOptionPane.showMessageDialog(this, "場次移除成功!", "成功", JOptionPane.INFORMATION_MESSAGE);
+                    removeShowtimeIdField.setText("");
+                    loadAllShowtimes();
+                    loadAllReservations();
+                } else {
+                    JOptionPane.showMessageDialog(this, "移除場次失敗 (可能是 ID 不存在)", "移除失敗", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "請輸入有效的數字場次 ID", "輸入錯誤", JOptionPane.ERROR_MESSAGE);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "移除場次時發生錯誤: " + ex.getMessage(), "系統錯誤", JOptionPane.ERROR_MESSAGE);
+            ex.printStackTrace();
+        }
+    }
+
     // =========================================================================
     // Reservation Management Panel (Tab 3)
     // =========================================================================
@@ -479,38 +548,17 @@ public class AdminMenuPanel extends JPanel {
         // 訂單詳細資訊面板
         JPanel detailsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         detailsPanel.add(new JLabel("選中訂單詳細資訊："));
-        JLabel detailsLabel = new JLabel("未選擇訂單");
-        detailsPanel.add(detailsLabel);
-        
-        // 當選擇表格行時顯示詳細資訊
-        reservationsTable.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting() && reservationsTable.getSelectedRow() != -1) {
-                int row = reservationsTable.convertRowIndexToModel(reservationsTable.getSelectedRow());
-                String id = reservationsTableModel.getValueAt(row, 0).toString();
-                String memberId = reservationsTableModel.getValueAt(row, 1).toString();
-                String movieName = reservationsTableModel.getValueAt(row, 3).toString();
-                String status = reservationsTableModel.getValueAt(row, 8).toString();
-                
-                updateReservationIdField.setText(id);
-                detailsLabel.setText("ID: " + id + " | 會員: " + memberId + " | 電影: " + movieName + " | 狀態: " + status);
-            }
-        });
-        
-        actionPanel.add(detailsPanel, BorderLayout.NORTH);
-        
-        // 狀態更新面板
-        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        statusPanel.add(new JLabel("訂票 ID:"));
+        detailsPanel.add(new JLabel("訂票 ID:"));
         updateReservationIdField = new JTextField(5);
-        statusPanel.add(updateReservationIdField);
-        statusPanel.add(new JLabel("新狀態:"));
+        detailsPanel.add(updateReservationIdField);
+        detailsPanel.add(new JLabel("新狀態:"));
         updateReservationStatusCombo = new JComboBox<>(new String[]{"CONFIRMED", "CANCELLED"});
-        statusPanel.add(updateReservationStatusCombo);
+        detailsPanel.add(updateReservationStatusCombo);
         updateReservationStatusButton = new JButton("更新狀態");
         updateReservationStatusButton.addActionListener(e -> handleUpdateReservationStatus());
-        statusPanel.add(updateReservationStatusButton);
+        detailsPanel.add(updateReservationStatusButton);
         
-        actionPanel.add(statusPanel, BorderLayout.CENTER);
+        actionPanel.add(detailsPanel, BorderLayout.CENTER);
 
         panel.add(actionPanel, BorderLayout.SOUTH);
 
@@ -638,7 +686,8 @@ public class AdminMenuPanel extends JPanel {
                 }
                 
                 // 顯示場次和影廳資訊
-                String theaterId = String.valueOf(res.getTheaterUid());
+                Showtime showtimeObj = res.getShowtime();
+                String theaterType = (showtimeObj != null && showtimeObj.getTheater() != null) ? showtimeObj.getTheater().getType() : "未知影廳";
                 String showTimeStr = res.getTime();
                 
                 System.out.println("處理訂單 ID: " + res.getUid() + ", 會員: " + memberName + ", 電影: " + movieName + ", 時間: " + showTimeStr);
@@ -650,7 +699,7 @@ public class AdminMenuPanel extends JPanel {
                     memberName,
                     movieName,
                     res.getShowtimeUid(),
-                    theaterId,
+                    theaterType,
                     showTimeStr,
                     res.getSeatNo(),
                     res.getStatus()

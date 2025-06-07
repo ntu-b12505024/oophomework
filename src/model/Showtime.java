@@ -7,21 +7,25 @@ public class Showtime {
     private int uid;
     private int movieUid;
     private int theaterUid;
-    private String time;
-    private int availableSeats; // 新增可用座位數
+    private String startTime; // 新增開始時間
+    private String endTime;   // 新增結束時間
+    private int availableSeats; // 可用座位數
 
     // Constructor for reading from DB
-    public Showtime(int uid, int movieUid, int theaterUid, String time, int availableSeats) {
+    public Showtime(int uid, int movieUid, int theaterUid,
+                    String startTime, String endTime, int availableSeats) {
         this.uid = uid;
         this.movieUid = movieUid;
         this.theaterUid = theaterUid;
-        this.time = time;
+        this.startTime = startTime;
+        this.endTime = endTime;
         this.availableSeats = availableSeats;
     }
 
     // Constructor for creating new showtime (availableSeats will be set by DAO)
-    public Showtime(int uid, int movieUid, int theaterUid, String time) {
-        this(uid, movieUid, theaterUid, time, 0); // Initialize with 0, DAO will set the correct value
+    public Showtime(int uid, int movieUid, int theaterUid,
+                    String startTime, String endTime) {
+        this(uid, movieUid, theaterUid, startTime, endTime, 0);
     }
 
     public int getUid() {
@@ -36,22 +40,15 @@ public class Showtime {
         return theaterUid;
     }
 
-    public String getTime() {
-        return time;
-    }
+    public String getStartTime() { return startTime; }
+    public String getEndTime() { return endTime; }
 
-    public int getAvailableSeats() {
-        return availableSeats;
-    }
+    public int getAvailableSeats() { return availableSeats; }
 
-    // Setter might not be needed if only DAO modifies it
-    public void setAvailableSeats(int availableSeats) {
-        this.availableSeats = availableSeats;
-    }
+    public void setAvailableSeats(int availableSeats) { this.availableSeats = availableSeats; }
 
-    public void setTime(String time) {
-        this.time = time;
-    }
+    public void setStartTime(String startTime) { this.startTime = startTime; }
+    public void setEndTime(String endTime) { this.endTime = endTime; }
 
     /**
      * Returns the Movie object associated with this showtime.
@@ -71,7 +68,7 @@ public class Showtime {
      * Returns the show time string.
      */
     public String getShowTime() {
-        return getTime();
+        return getStartTime() + " - " + getEndTime();
     }
 
     /**
@@ -85,7 +82,7 @@ public class Showtime {
 
     @Override
     public String toString() {
-        return String.format("Showtime [ID: %d, MovieID: %d, TheaterID: %d, Time: %s, Available Seats: %d]",
-                             uid, movieUid, theaterUid, time, availableSeats);
+        return String.format("Showtime [ID: %d, MovieID: %d, TheaterID: %d, Start Time: %s, End Time: %s, Available Seats: %d]",
+                             uid, movieUid, theaterUid, startTime, endTime, availableSeats);
     }
 }

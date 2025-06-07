@@ -43,6 +43,8 @@ public class Main {
             // 確保資料是最新的
             System.out.println("檢查並更新電影和影廳資料...");
             importDataFromJson();
+            // 在已有資料庫上插入預設場次（使用 INSERT OR IGNORE 保持 idempotent）
+            DBUtil.initializeDatabase();
         }
 
         // 啟動GUI界面

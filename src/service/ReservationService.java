@@ -296,16 +296,22 @@ public class ReservationService {
 
                 // 解析電影開始時間
                 SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm");
-                Date showtimeDate = dateFormat.parse(showtime.getTime());
+                Date showtimeDate = dateFormat.parse(showtime.getStartTime());
                 Date currentTime = new Date();
 
                 // 計算時間差（毫秒）
                 long differenceInMillis = showtimeDate.getTime() - currentTime.getTime();
                 long differenceInMinutes = differenceInMillis / (60 * 1000);
 
-                // 如果時間差小於30分鐘，拒絕取消訂票
-                if (differenceInMinutes < 30 && differenceInMinutes >= 0) {
-                    System.err.println("Cancellation failed: Cannot cancel ticket within 30 minutes before showtime.");
+                // 如果在電影開始前30分鐘或之後，拒絕取消訂票
+                if (differenceInMinutes <= 30) {
+                    if (differenceInMinutes >= 0) {
+                        // 在電影開始前30分鐘內(含)
+                        System.err.println("Cancellation failed: Cannot cancel ticket within 30 minutes before showtime.");
+                    } else {
+                        // 電影已經開始後
+                        System.err.println("Cancellation failed: Cannot cancel ticket after showtime has started.");
+                    }
                     conn.rollback();
                     return false;
                 }
