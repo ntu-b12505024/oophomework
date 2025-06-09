@@ -42,12 +42,12 @@ public class Movie {
      */
     public int getMinimumAge() {
         return switch (this.rating.toUpperCase()) {
-            case "G" -> 0; // General Audiences
-            case "PG" -> 0; // Parental Guidance Suggested (Technically no restriction, but let's treat as 0 for simplicity)
-            case "PG-13" -> 13; // Parents Strongly Cautioned
-            case "R" -> 17; // Restricted
-            case "NC-17" -> 18; // Adults Only
-            default -> 0; // Default to no restriction for unknown ratings
+            case "G" -> 0;    // 無年齡限制
+            case "PG" -> 7;   // 7 歲以上（6 歲以下包含）才能訂票
+            case "PG-13" -> 13; // 13 歲以上
+            case "R" -> 18;   // 18 歲以上
+            case "NC-17" -> 18; // 18 歲以上
+            default -> 0;      // 預設無限制
         };
     }
 

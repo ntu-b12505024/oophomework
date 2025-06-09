@@ -174,52 +174,39 @@ public class DBUtil {
                 //                       "((SELECT uid FROM movie WHERE name='Zootopia'), (SELECT uid FROM theater WHERE type='Hall B'), '2025-05-10 15:00', 50);";
                 // conn.createStatement().execute(insertShowtimes);
 
-                // Insert default showtimes
+                // 移除 SQL 插入預設場次，改為呼叫 Service 計算結束時間
+                /*
                 String insertShowtimes = "INSERT OR IGNORE INTO showtime (movie_uid, theater_uid, start_time, end_time, available_seats) VALUES ((SELECT uid FROM movie WHERE name = ?), (SELECT uid FROM theater WHERE type = ?), ?, ?, ?)";
                 try (PreparedStatement stmt = conn.prepareStatement(insertShowtimes)) {
-                    stmt.setString(1, "Star Wars");
-                    stmt.setString(2, "Hall A");
-                    stmt.setString(3, "2025-06-10 14:00");
-                    stmt.setString(4, "2025-06-10 14:00");
-                    stmt.setInt(5, 100);
-                    stmt.addBatch();
-
-                    stmt.setString(1, "Zootopia");
-                    stmt.setString(2, "Hall B");
-                    stmt.setString(3, "2025-06-10 15:00");
-                    stmt.setString(4, "2025-06-10 15:00");
-                    stmt.setInt(5, 50);
-                    stmt.addBatch();
-
-                    stmt.setString(1, "Inception");
-                    stmt.setString(2, "Hall A");
-                    stmt.setString(3, "2025-06-11 16:00");
-                    stmt.setString(4, "2025-06-11 16:00");
-                    stmt.setInt(5, 100);
-                    stmt.addBatch();
-
-                    stmt.setString(1, "The Godfather");
-                    stmt.setString(2, "Hall B");
-                    stmt.setString(3, "2025-06-11 17:00");
-                    stmt.setString(4, "2025-06-11 17:00");
-                    stmt.setInt(5, 50);
-                    stmt.addBatch();
-
-                    stmt.setString(1, "Frozen");
-                    stmt.setString(2, "Hall A");
-                    stmt.setString(3, "2025-06-12 18:00");
-                    stmt.setString(4, "2025-06-12 18:00");
-                    stmt.setInt(5, 100);
-                    stmt.addBatch();
-
-                    stmt.setString(1, "Avengers: Endgame");
-                    stmt.setString(2, "Hall B");
-                    stmt.setString(3, "2025-06-12 19:00");
-                    stmt.setString(4, "2025-06-12 19:00");
-                    stmt.setInt(5, 50);
-                    stmt.addBatch();
-
-                    stmt.executeBatch();
+                    // ...batch insert...
+                }
+                */
+                // 使用 ShowtimeService 自動計算結束時間並新增場次
+                {
+                    service.ShowtimeService showtimeService = new service.ShowtimeService();
+                    dao.MovieDAO movieDAO = new dao.MovieDAO();
+                    dao.TheaterDAO theaterDAO = new dao.TheaterDAO();
+                    // 各影廳 ID
+                    int hallAId = theaterDAO.getTheaterByType("Hall A").getUid();
+                    int hallBId = theaterDAO.getTheaterByType("Hall B").getUid();
+                    // 預設場次資料: {電影名稱, 影廳ID, 開始時間}
+                    String[][] defaultShowtimes = {
+                        {"Star Wars", String.valueOf(hallAId), "2025-06-10 14:00"},
+                        {"Zootopia", String.valueOf(hallBId), "2025-06-10 15:00"},
+                        {"Inception", String.valueOf(hallAId), "2025-06-11 16:00"},
+                        {"The Godfather", String.valueOf(hallBId), "2025-06-11 17:00"},
+                        {"Frozen", String.valueOf(hallAId), "2025-06-12 18:00"},
+                        {"Avengers: Endgame", String.valueOf(hallBId), "2025-06-12 19:00"}
+                    };
+                    for (String[] entry : defaultShowtimes) {
+                        String movieName = entry[0];
+                        int theaterId = Integer.parseInt(entry[1]);
+                        String startTime = entry[2];
+                        model.Movie movie = movieDAO.getMovieByName(movieName);
+                        if (movie != null) {
+                            showtimeService.addShowtime(movie.getUid(), theaterId, startTime);
+                        }
+                    }
                 }
 
                 // 首先確保 reviews 表存在

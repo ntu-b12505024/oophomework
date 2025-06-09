@@ -143,7 +143,7 @@ public class UserMenuPanel extends JPanel {
         // --- Showtime List ---
         JPanel showtimesPanel = new JPanel(new BorderLayout());
         showtimesPanel.setBorder(BorderFactory.createTitledBorder("選擇場次"));
-        showtimesTableModel = new DefaultTableModel(new String[]{"ID", "影廳", "時間", "剩餘座位"}, 0){
+        showtimesTableModel = new DefaultTableModel(new String[]{"ID", "影廳", "時段", "剩餘座位"}, 0){
              @Override public boolean isCellEditable(int row, int column) { return false; } // Not editable
         };
         showtimesTable = new JTable(showtimesTableModel);
