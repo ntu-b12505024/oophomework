@@ -53,8 +53,17 @@ public class ReservationService {
         if (movie == null) {
             throw new IllegalArgumentException("電影不存在");
         }
-        if (member.getAge() < movie.getMinimumAge()) {
-            throw new AgeRestrictionException("會員年齡不符合電影分級要求");
+        int memberAge = member.getAge();
+        int minimumAge = movie.getMinimumAge();
+        
+        // 如果年齡計算失敗（返回-1），拒絕訂票
+        if (memberAge < 0) {
+            throw new AgeRestrictionException("無法確認會員年齡，請檢查生日資料");
+        }
+        
+        // 年齡限制檢查：會員年齡必須大於等於電影最低年齡
+        if (memberAge < minimumAge) {
+            throw new AgeRestrictionException(String.format("會員年齡不符合電影分級要求（會員年齡：%d歲，電影最低年齡：%d歲）", memberAge, minimumAge));
         }
 
         // 調用多座位訂票方法，只訂一個座位
@@ -104,8 +113,17 @@ public class ReservationService {
             }
 
             // 檢查電影分級與會員年齡
-            if (member.getAge() < movie.getMinimumAge()) {
-                throw new AgeRestrictionException("會員年齡不符合電影分級要求");
+            int memberAge = member.getAge();
+            int minimumAge = movie.getMinimumAge();
+            
+            // 如果年齡計算失敗（返回-1），拒絕訂票
+            if (memberAge < 0) {
+                throw new AgeRestrictionException("無法確認會員年齡，請檢查生日資料");
+            }
+            
+            // 年齡限制檢查：會員年齡必須大於等於電影最低年齡
+            if (memberAge < minimumAge) {
+                throw new AgeRestrictionException(String.format("會員年齡不符合電影分級要求（會員年齡：%d歲，電影最低年齡：%d歲）", memberAge, minimumAge));
             }
             
             // 確認電影ID與場次所屬電影ID一致

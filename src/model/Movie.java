@@ -41,14 +41,20 @@ public class Movie {
      * Returns 0 if the rating implies no age restriction or is unknown.
      */
     public int getMinimumAge() {
-        return switch (this.rating.toUpperCase()) {
-            case "G" -> 0;    // 無年齡限制
-            case "PG" -> 7;   // 7 歲以上（6 歲以下包含）才能訂票
-            case "PG-13" -> 13; // 13 歲以上
-            case "R" -> 18;   // 18 歲以上
-            case "NC-17" -> 18; // 18 歲以上
-            default -> 0;      // 預設無限制
-        };
+        String upperRating = this.rating.toUpperCase();
+        if ("G".equals(upperRating)) {
+            return 0;    // 無年齡限制
+        } else if ("PG".equals(upperRating)) {
+            return 7;    // 7 歲以上（6 歲以下包含）才能訂票
+        } else if ("PG-13".equals(upperRating)) {
+            return 13;   // 13 歲以上
+        } else if ("R".equals(upperRating)) {
+            return 18;   // 18 歲以上
+        } else if ("NC-17".equals(upperRating)) {
+            return 18;   // 18 歲以上
+        } else {
+            return 0;    // 預設無限制
+        }
     }
 
     @Override
